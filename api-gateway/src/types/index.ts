@@ -1,0 +1,42 @@
+export interface User {
+    id: number;
+    session_id: string;
+    created_id: string;
+}
+
+export interface Job {
+    id: number;
+    user_id: number;
+    status: JobStatus;
+    input_file: string;
+    output_file?: string;
+    error_message?: string;
+    created_at: string;
+    completed_at?: string;
+}
+
+export enum JobStatus {
+    PENING = "pending",
+    PROCESSING = "processing",
+    COMPLETED = "completed",
+    FAILED = "failed",
+}
+
+export interface ConversionRequest {
+    input_file: string;
+    output_format: string;
+    quality: string;
+}
+
+export interface ConversionResponse {
+    job_id: number;
+    status: string;
+    output_file?: string;
+    error?: string;
+}
+
+declare module "express-session" {
+    interface SessionData {
+        userid?: number;
+    }
+}
