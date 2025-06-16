@@ -1,10 +1,10 @@
 import express from "express";
 import cors from "cors";
 import helmet from "helmet";
-import session from "express-session";
 import { config } from "./utils/config";
 import { initialzeDatabase } from "./database/schema";
-
+import { sessionMiddleware } from "./middlewares/session";
+import userRoutes from "@/routes/user";
 const app = express();
 
 // Security middleware
@@ -17,18 +17,7 @@ app.use(
 );
 
 // Session configuration
-app.use(
-    session({
-        secret: config.session.secret,
-        resave: false,
-        saveUninitialized: true,
-        cookie: {
-            secure: config.nodeEnv === "production",
-            httpOnly: true,
-            maxAge: 24 * 60 * 60 * 1000, // 24 hours
-        },
-    })
-);
+app.use(sessionMiddleware);
 
 // Body parsing middleware
 app.use(express.json({ limit: "10mb" }));
@@ -50,9 +39,7 @@ app.get("/health", (req, res) => {
 });
 
 // API routes
-app.get("/api", (req, res) => {
-    res.json({ message: "API Gateway is running!" });
-});
+app.use("/api/users", userRoutes);
 
 // Global error handler
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {

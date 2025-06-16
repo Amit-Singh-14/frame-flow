@@ -1,7 +1,7 @@
 export interface User {
     id: number;
     session_id: string;
-    created_id: string;
+    created_at: string;
 }
 
 export interface Job {
@@ -35,8 +35,14 @@ export interface ConversionResponse {
     error?: string;
 }
 
+export interface SessionData {
+    userId?: number;
+    sessionId?: string;
+}
+
 declare module "express-session" {
     interface SessionData {
-        userid?: number;
+        userId?: number;
+        sessionId?: string;
     }
 }
