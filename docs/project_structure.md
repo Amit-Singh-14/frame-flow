@@ -300,67 +300,68 @@ processing-service/
 ## 🐳 Docker Configuration
 
 ### Root docker-compose.yml
+
 ```yaml
-version: '3.8'
+version: "3.8"
 services:
-  postgres:
-    image: postgres:15
-    environment:
-      POSTGRES_DB: video_platform
-      POSTGRES_USER: admin
-      POSTGRES_PASSWORD: password
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-      - ./shared/database/migrations:/docker-entrypoint-initdb.d
-    ports:
-      - "5432:5432"
+    postgres:
+        image: postgres:15
+        environment:
+            POSTGRES_DB: video_platform
+            POSTGRES_USER: admin
+            POSTGRES_PASSWORD: password
+        volumes:
+            - postgres_data:/var/lib/postgresql/data
+            - ./shared/database/migrations:/docker-entrypoint-initdb.d
+        ports:
+            - "5432:5432"
 
-  redis:
-    image: redis:7-alpine
-    ports:
-      - "6379:6379"
-    volumes:
-      - redis_data:/data
+    redis:
+        image: redis:7-alpine
+        ports:
+            - "6379:6379"
+        volumes:
+            - redis_data:/data
 
-  api-gateway:
-    build: ./api-gateway
-    ports:
-      - "3001:3001"
-    depends_on:
-      - postgres
-      - redis
-    environment:
-      - NODE_ENV=development
-    volumes:
-      - ./api-gateway:/app
-      - /app/node_modules
+    api-gateway:
+        build: ./api-gateway
+        ports:
+            - "3001:3001"
+        depends_on:
+            - postgres
+            - redis
+        environment:
+            - NODE_ENV=development
+        volumes:
+            - ./api-gateway:/app
+            - /app/node_modules
 
-  processing-service:
-    build: ./processing-service
-    ports:
-      - "8080:8080"
-    depends_on:
-      - postgres
-      - redis
-    environment:
-      - GO_ENV=development
-    volumes:
-      - ./processing-service:/app
-      - ./storage:/storage
+    processing-service:
+        build: ./processing-service
+        ports:
+            - "8080:8080"
+        depends_on:
+            - postgres
+            - redis
+        environment:
+            - GO_ENV=development
+        volumes:
+            - ./processing-service:/app
+            - ./storage:/storage
 
-  frontend:
-    build: ./frontend
-    ports:
-      - "3000:3000"
-    depends_on:
-      - api-gateway
-    volumes:
-      - ./frontend:/app
-      - /app/node_modules
+    frontend:
+        build: ./frontend
+        ports:
+            - "3000:3000"
+        depends_on:
+            - api-gateway
+        volumes:
+            - ./frontend:/app
+            - /app/node_modules
 
 volumes:
-  postgres_data:
-  redis_data:
+    postgres_data:
+    redis_data:
 ```
 
 ---
@@ -368,6 +369,7 @@ volumes:
 ## 📋 Configuration Files
 
 ### Root .env.example
+
 ```env
 # Database
 DB_HOST=localhost
@@ -412,6 +414,7 @@ EMAIL_PASSWORD=
 ## 🚀 Getting Started Scripts
 
 ### Root setup.sh
+
 ```bash
 #!/bin/bash
 echo "Setting up Video Processing Platform..."
@@ -444,13 +447,12 @@ echo "Setup complete! Run 'npm run dev' to start development servers."
 ## 📝 Development Workflow
 
 ### Phase 1 Development Order:
+
 1. **Setup project structure** (Day 1)
 2. **Database setup** with basic tables (Day 1-2)
 3. **Go service** - basic file processing (Day 2-4)
 4. **Node.js API** - upload endpoints (Day 4-6)
 5. **React frontend** - basic UI (Day 6-8)
-6. **Integration testing** (Day 9-10)
-7. **Docker setup** (Day 11-12)
-8. **Documentation** (Day 13-14)
+6. **Docker setup** (Day 11-12)
 
 This structure scales perfectly from Phase 1 through Phase 5. Each service is independent, well-organized, and easy to extend. The separation of concerns makes it easy to work on different parts simultaneously and deploy them independently.
