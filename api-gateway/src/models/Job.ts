@@ -48,7 +48,7 @@ export class JobModel {
             await db.run(
                 `
                 UPDATE jobs
-                    SET status = ?, output_file = ? , error_message = ?, completd_at = ?
+                    SET status = ?, output_file = ? , error_message = ?, completed_at = ?
                     WHERE id = ?
                 `,
                 [status, outputFile || null, errorMessage || null, completedAt, id]
