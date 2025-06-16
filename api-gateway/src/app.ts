@@ -5,7 +5,10 @@ import { config } from "./utils/config";
 import { initialzeDatabase } from "./database/schema";
 import { sessionMiddleware } from "./middlewares/session";
 import userRoutes from "@/routes/user";
+import { detailedRequestLogger } from "./middlewares/requestLogger";
 const app = express();
+
+app.use(detailedRequestLogger);
 
 // Security middleware
 app.use(helmet());
@@ -16,9 +19,6 @@ app.use(
     })
 );
 
-// Session configuration
-app.use(sessionMiddleware);
-
 // Body parsing middleware
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
@@ -28,6 +28,9 @@ initialzeDatabase().catch((error) => {
     console.error("Failed to initialize database:", error);
     process.exit(1);
 });
+
+// Session configuration
+app.use(sessionMiddleware);
 
 // Health check endpoint
 app.get("/health", (req, res) => {
@@ -43,14 +46,27 @@ app.use("/api/users", userRoutes);
 
 // Global error handler
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
-    console.error("Error:", err);
+    console.error(`ERROR [${req.requestId}]:`, err.stack);
 
-    res.status(err.status || 500).json({
-        error: config.nodeEnv === "production" ? "Internal Server Error" : err.message,
-        ...(config.nodeEnv !== "production" && { stack: err.stack }),
+    // Log error details
+    const errorLog = {
+        timestamp: new Date().toISOString(),
+        requestId: req.requestId,
+        error: err.message,
+        stack: err.stack,
+        method: req.method,
+        url: req.originalUrl,
+        userId: req.session?.userId,
+        ip: req.ip,
+    };
+
+    console.error("Detailed Error:", errorLog);
+
+    res.status(500).json({
+        error: "Something went wrong!",
+        requestId: req.requestId,
     });
 });
-
 // FIXME:   throw new TypeError(`Missing parameter name at ${i}: ${DEBUG_URL}`);
 
 // app.all("*", (req, res) => {
