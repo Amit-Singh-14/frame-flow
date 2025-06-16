@@ -16,7 +16,7 @@ export interface Job {
 }
 
 export enum JobStatus {
-    PENING = "pending",
+    PENDING = "pending",
     PROCESSING = "processing",
     COMPLETED = "completed",
     FAILED = "failed",

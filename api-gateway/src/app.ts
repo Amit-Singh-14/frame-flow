@@ -3,6 +3,7 @@ import cors from "cors";
 import helmet from "helmet";
 import session from "express-session";
 import { config } from "./utils/config";
+import { initialzeDatabase } from "./database/schema";
 
 const app = express();
 
@@ -32,6 +33,12 @@ app.use(
 // Body parsing middleware
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
+
+// Initialize database
+initialzeDatabase().catch((error) => {
+    console.error("Failed to initialize database:", error);
+    process.exit(1);
+});
 
 // Health check endpoint
 app.get("/health", (req, res) => {
