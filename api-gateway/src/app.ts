@@ -4,8 +4,11 @@ import helmet from "helmet";
 import { config } from "./utils/config";
 import { initialzeDatabase } from "./database/schema";
 import { sessionMiddleware } from "./middlewares/session";
-import userRoutes from "@/routes/user";
 import { detailedRequestLogger } from "./middlewares/requestLogger";
+import userRoutes from "@/routes/user";
+import uploadRoutes from "@/routes/upload";
+import path from "path";
+
 const app = express();
 
 app.use(detailedRequestLogger);
@@ -43,6 +46,7 @@ app.get("/health", (req, res) => {
 
 // API routes
 app.use("/api/users", userRoutes);
+app.use("/api/upload", uploadRoutes);
 
 // Global error handler
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {

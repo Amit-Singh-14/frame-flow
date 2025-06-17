@@ -37,6 +37,7 @@ const storage = multer.diskStorage({
     },
     filename: (req, file, cb) => {
         const uniqueFilename = FileUtils.generateUniqueFileName(file.originalname);
+        cb(null, uniqueFilename);
     },
 });
 
@@ -67,18 +68,19 @@ const fileFilter = (req: Request, file: Express.Multer.File, cb: multer.FileFilt
             return cb(error);
         }
 
-        cb(null, true);
+        return cb(null, true);
     } catch (error) {
-        cb(error as Error);
+        return cb(error as Error);
     }
 };
 
 // multer instance for middlware
+console.log(uploadConfig);
 export const uploadMiddleware = multer({
     storage,
     fileFilter,
     limits: {
-        fileSize: uploadConfig.maxFileSize,
+        fileSize: 100 * 1024 * 1024,
         files: 1,
     },
 });
@@ -86,6 +88,7 @@ export const uploadMiddleware = multer({
 // error hanlding middleware for multer errors
 
 export const handleUploadError = (error: any, req: Request, res: any, next: any) => {
+    console.log("here");
     if (error instanceof multer.MulterError) {
         switch (error.code) {
             case "LIMIT_FILE_SIZE":
