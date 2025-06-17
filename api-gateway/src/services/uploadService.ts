@@ -1,0 +1,57 @@
+import { JobModel } from "@/models/Job";
+import { JobStatus } from "@/types";
+import { UploadFile } from "@/types/upload";
+import { FileUtils } from "@/utils/file";
+
+export class UploadSerice {
+    async processUploadFile(file: Express.Multer.File, userId: number): Promise<{ file: UploadFile; jobId: number }> {
+        try {
+            const uploadFile: UploadFile = {
+                originalName: file.originalname,
+                filename: file.fieldname,
+                mimetype: file.mimetype,
+                size: file.size,
+                path: file.path,
+            };
+
+            const job = await JobModel.create({
+                input_file: file.path,
+                user_id: userId,
+                file_size: file.size,
+            });
+
+            return {
+                file: uploadFile,
+                jobId: job.id,
+            };
+        } catch (error) {
+            // if job createion fails, clean up the uploaded file
+            await FileUtils.deleteFile(file.path);
+            throw error;
+        }
+    }
+
+    async validateUploadedFile(filePath: string): Promise<boolean> {
+        try {
+            // check if file exists and is readable
+            const fileSize = await FileUtils.getFileSize(filePath);
+            return fileSize > 0;
+        } catch (error) {
+            console.error("File validation failed: ", error);
+            throw error;
+        }
+    }
+
+    async cancelUpload(filePath: string, jobId?: number): Promise<void> {
+        try {
+            await FileUtils.deleteFile(filePath);
+
+            // if job was created, update it status
+            if (jobId) {
+                await JobModel.updateStatus(jobId, JobStatus.FAILED, undefined, "Uplaod cancelled");
+            }
+        } catch (error) {
+            console.error("Error canceling upload:", error);
+        }
+    }
+}

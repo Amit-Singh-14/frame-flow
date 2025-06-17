@@ -14,7 +14,6 @@ export const config = {
     storage: {
         uploadDir: process.env.UPLOAD_DIR || "./uploads",
         outputDir: process.env.OUTPUT_DIR || "./outputs",
-        maxFileSize: parseInt(process.env.MAX_FILE_SIZE || "100000000"), // 100MB
     },
 
     services: {
@@ -23,6 +22,10 @@ export const config = {
 
     session: {
         secret: process.env.SESSION_SECRET || "change-this-secret-key",
+    },
+    files: {
+        maxFileSize: parseInt(process.env.MAX_FILE_SIZE || "100000000"),
+        allowedVideoFormats: (process.env.ALLOWED_VIDEO_FORMATS || "mp4,avi,mov,wmv,flv,webm,mkv").split(","),
     },
 };
 
