@@ -275,4 +275,18 @@ export class JobService {
             throw error;
         }
     }
+
+    // Get job file sizes for statistics
+    static async getJobFileSizes(job: Job): Promise<{ input: number; output: number }> {
+        try {
+            const inputSize = job.input_file ? await FileUtils.getFileSize(job.input_file) : 0;
+
+            const outputSize = job.output_file ? await FileUtils.getFileSize(job.output_file) : 0;
+
+            return { input: inputSize, output: outputSize };
+        } catch (error) {
+            console.error("Error getting file size stats", error);
+            throw error;
+        }
+    }
 }
