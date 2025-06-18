@@ -200,6 +200,37 @@ export class JobService {
         }
     }
 
+    // Job deletion with file cleanup
+    static async deleteJob(jobId: number, userId: number): Promise<void> {
+        try {
+            const job = await JobModel.findById(jobId);
+
+            if (!job) {
+                throw new Error("Job not found");
+            }
+
+            if (job.user_id !== userId) {
+                throw new Error("Access denied");
+            }
+
+            // Remove from queue if pending
+            if (job.status === JobStatus.PENDING) {
+                this.jobQueue.removeFromQueue(jobId);
+            }
+
+            // Clean up files
+            await this.cleanupJobFiles(job);
+
+            // Delete from database
+            await JobModel.delete(jobId);
+
+            console.log(`Job ${jobId} deleted successfully`);
+        } catch (error) {
+            console.error("Error deleting job:", error);
+            throw error;
+        }
+    }
+
     private static async cleanupJobFiles(job: Job): Promise<void> {
         try {
             // delete input file if it exists

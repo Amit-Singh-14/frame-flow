@@ -13,6 +13,8 @@ export interface Job {
     error_message?: string;
     created_at: string;
     completed_at?: string;
+    conversion_settings?: string;
+    file_size: number;
 }
 
 export enum JobStatus {

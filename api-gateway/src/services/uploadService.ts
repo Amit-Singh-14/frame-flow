@@ -2,6 +2,7 @@ import { JobModel } from "@/models/Job";
 import { JobStatus } from "@/types";
 import { UploadFile } from "@/types/upload";
 import { FileUtils } from "@/utils/file";
+import { JobService } from "./jobService";
 
 export class UploadSerice {
     async processUploadFile(file: Express.Multer.File, userId: number): Promise<{ file: UploadFile; jobId: number }> {
@@ -14,10 +15,14 @@ export class UploadSerice {
                 path: file.path,
             };
 
-            const job = await JobModel.create({
-                input_file: file.path,
+            const job = await JobService.createJob({
                 user_id: userId,
+                input_file: file.path,
                 file_size: file.size,
+                conversion_settings: JSON.stringify({
+                    quality: "medium",
+                    format: "mp4",
+                }),
             });
 
             return {
