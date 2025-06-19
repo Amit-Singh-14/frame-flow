@@ -53,6 +53,21 @@ export class JobMonitor {
         console.log(`Job monitoring started with ${this.HEALTH_CHECK_INTERVAL / 1000}s interval`);
     }
 
+    static stopMonitoring(): void {
+        if (!this.isMonitoring) {
+            console.log("Job monitoring is not running");
+            return;
+        }
+
+        if (this.monitoringInterval) {
+            clearInterval(this.monitoringInterval);
+            this.monitoringInterval = null;
+        }
+
+        this.isMonitoring = false;
+        console.log("Job monitoring stopped");
+    }
+
     static async runHealthCheck(): Promise<JobHealtCheck[]> {
         try {
             console.log("Running job health check...");
