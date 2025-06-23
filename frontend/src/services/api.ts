@@ -1,13 +1,13 @@
+import { APP_CONFIG } from "@/utils/constants";
 import axios from "axios";
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
-
 export const api = axios.create({
-    baseURL: API_BASE_URL,
+    baseURL: APP_CONFIG.API_BASE_URL,
     timeout: 30000,
     headers: {
         "Content-Type": "application/json",
     },
+    withCredentials: true,
 });
 
 api.interceptors.request.use(
@@ -47,15 +47,16 @@ api.interceptors.response.use(
 
 export const API_ENDPOINTS = {
     // User endpoints
-    createSession: "/users/session",
-    getCurrentUser: "/users/me",
+    createSession: "/api/users/session",
+    getCurrentUser: "/api/users/me",
 
     // upload endpoints
-    upload: "/upload",
+    upload: "/api/upload",
 
     // Job endpoints
-    jobs: "/jobs",
-    jobDetail: (jobId: string) => `/jobs/${jobId}`,
+    jobs: "/api/jobs",
+    jobDetail: (jobId: string) => `/api/jobs/${jobId}`,
+    stats: "/api/jobs/stats",
 
     // monitoring endpoints
     // TODO: add rest job endpoint and monitoring enedpoints

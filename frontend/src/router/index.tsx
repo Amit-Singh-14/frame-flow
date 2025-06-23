@@ -1,4 +1,6 @@
 import Layout from "@/components/layouts";
+import Dashboard from "@/components/pages/Dashboard";
+import UploadPage from "@/components/pages/Upload";
 import { createBrowserRouter, Navigate } from "react-router-dom";
 
 export const router = createBrowserRouter([
@@ -12,11 +14,11 @@ export const router = createBrowserRouter([
             },
             {
                 path: "dashboard",
-                // element: <Dashboard />
+                element: <Dashboard />,
             },
             {
                 path: "upload",
-                // element: <Upload />,
+                element: <UploadPage />,
             },
             {
                 path: "jobs",
@@ -37,11 +39,3 @@ export const router = createBrowserRouter([
         element: <Navigate to="/dashboard" replace />,
     },
 ]);
-
-export const ROUTES = {
-    DASHBOARD: "/dashboard",
-    UPLOAD: "/upload",
-    JOBS: "/jobs",
-    JOB_DETAILS: (jobId: string) => `/jobs/${jobId}`,
-    MONITORING: "/monitoring",
-} as const;

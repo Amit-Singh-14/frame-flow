@@ -96,7 +96,7 @@ export class EnhancedJobService {
             const job = await JobModel.create(jobData);
 
             // Record initial status transition
-            await JobStatusManger.transitionJobStatus(job.id, JobStatus.PENDING, undefined, undefined, "Job created and queued");
+            // await JobStatusManger.transitionJobStatus(job.id, JobStatus.PENDING, undefined, undefined, "Job created and queued");
 
             // Add to processing queue
             this.jobQueue.enqueue(job.id);
@@ -431,6 +431,7 @@ export class EnhancedJobService {
      */
     static async getServiceStatistics(userId?: number) {
         try {
+            console.error(userId);
             const queueStats = this.getQueueStats();
             const monitoringStats = await JobMonitor.getMonitoringStats();
             const monitoringStatus = JobMonitor.getMonitoringStatus();

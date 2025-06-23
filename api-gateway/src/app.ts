@@ -35,6 +35,13 @@ initialzeDatabase().catch((error) => {
 // Session configuration
 app.use(sessionMiddleware);
 
+// app.use((req, res, next) => {
+//     console.log("Incoming Cookies:", req.headers.cookie);
+//     console.log("Session ID:", req.sessionID);
+//     console.log("Session:", req.session);
+//     next();
+// });
+
 // Health check endpoint
 app.get("/health", (req, res) => {
     res.json({
@@ -51,6 +58,7 @@ app.use("/api/jobs", jobsRoutes);
 
 // Global error handler
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+    console.log(err);
     console.error(`ERROR [${req.requestId}]:`, err.stack);
 
     // Log error details

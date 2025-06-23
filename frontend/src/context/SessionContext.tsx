@@ -9,7 +9,7 @@ interface User {
     createdAt: string;
 }
 
-interface SessionContextType {
+export interface SessionContextType {
     user: User | undefined;
     sessionId: string | null;
     isLoading: boolean;
@@ -60,9 +60,13 @@ export const SessionProvider = ({ children }: SessionProviderProps) => {
         retry: false,
     });
 
+    console.log(user, isLoading, error);
+
     // mutation to create new session
     const createSessionMutation = useMutation({
         mutationFn: createSessionApi,
+        retry: 1,
+        retryDelay: 10000,
         onSuccess: (newUser) => {
             setSessionId(newUser.sessionId);
             localStorage.setItem("sessionId", newUser.sessionId);
@@ -123,6 +127,7 @@ export const SessionProvider = ({ children }: SessionProviderProps) => {
 };
 
 // custom hook to use Session context
+// eslint-disable-next-line react-refresh/only-export-components
 export const useSession = (): SessionContextType => {
     const context = useContext(SessionContext);
     if (context === undefined) {

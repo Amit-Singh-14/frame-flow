@@ -22,6 +22,8 @@ router.post("/", ensureUser, uploadMiddleware.single("video"), async (req: Reque
             return;
         }
 
+        console.log(req.file, "userId", req.session.userId, "sessionId", req.sessionID, req.session.sessionId);
+
         // Validate the uploaded file
         const isValid = await uploadService.validateUploadedFile(req.file.path);
 
@@ -39,32 +41,32 @@ router.post("/", ensureUser, uploadMiddleware.single("video"), async (req: Reque
         const processedFile = await uploadService.processUploadFile(req.file, req.session.userId!);
 
         // Parse conversion settings from request body (if provided)
-        let conversionSettings = null;
-        if (req.body.conversionSettings) {
-            try {
-                conversionSettings =
-                    typeof req.body.conversionSettings === "string" ? req.body.conversionSettings : JSON.stringify(req.body.conversionSettings);
-            } catch (error) {
-                console.warn("Invalid conversion settings provided:", error);
-            }
-        }
+        // let conversionSettings = null;
+        // if (req.body.conversionSettings) {
+        //     try {
+        //         conversionSettings =
+        //             typeof req.body.conversionSettings === "string" ? req.body.conversionSettings : JSON.stringify(req.body.conversionSettings);
+        //     } catch (error) {
+        //         console.warn("Invalid conversion settings provided:", error);
+        //     }
+        // }
 
         // Create job using EnhancedJobService
-        const job = await EnhancedJobService.createJob({
-            user_id: req.session.userId!,
-            input_file: processedFile.file.path,
-            conversion_settings: conversionSettings,
-            file_size: processedFile.file.size,
-        });
+        // const job = await EnhancedJobService.createJob({
+        //     user_id: req.session.userId!,
+        //     input_file: processedFile.file.path,
+        //     conversion_settings: conversionSettings,
+        //     file_size: processedFile.file.size,
+        // });
 
         // Get enhanced job information
-        const enhancedJobInfo = await EnhancedJobService.getEnhancedJobDetails(job.id, req.session.userId!);
+        // const enhancedJobInfo = await EnhancedJobService.getEnhancedJobDetails(job.id, req.session.userId!);
 
-        // Get queue statistics
-        const queueStats = EnhancedJobService.getQueueStats();
+        // // Get queue statistics
+        // const queueStats = EnhancedJobService.getQueueStats();
 
         // Return enhanced success response
-        const response: UploadResponse = {
+        const response = {
             success: true,
             file: {
                 originalName: processedFile.file.originalName,
@@ -75,23 +77,23 @@ router.post("/", ensureUser, uploadMiddleware.single("video"), async (req: Reque
                 formattedSize: JobHelper.formatFileSize(processedFile.file.size),
             },
             job: {
-                id: job.id,
-                status: job.status,
-                input_file: job.input_file,
-                created_at: job.created_at,
-                file_size: job.file_size,
-                conversion_settings: job.conversion_settings,
-                // Enhanced job information
-                statusDescription: JobHelper.getStatusDescription(job.status),
-                estimatedCompletion: enhancedJobInfo.estimatedCompletion,
-                progress: enhancedJobInfo.progress,
-                healthStatus: enhancedJobInfo.healthStatus,
-                canRetry: enhancedJobInfo.canRetry,
-                canCancel: enhancedJobInfo.canCancel,
-                priority: JobHelper.getJobPriority(job),
-                progressMessage: JobHelper.getProgressMessage(job),
+                // id: job.id,
+                // status: job.status,
+                // input_file: job.input_file,
+                // created_at: job.created_at,
+                // file_size: job.file_size,
+                // conversion_settings: job.conversion_settings,
+                // // Enhanced job information
+                // statusDescription: JobHelper.getStatusDescription(job.status),
+                // estimatedCompletion: enhancedJobInfo.estimatedCompletion,
+                // progress: enhancedJobInfo.progress,
+                // healthStatus: enhancedJobInfo.healthStatus,
+                // canRetry: enhancedJobInfo.canRetry,
+                // canCancel: enhancedJobInfo.canCancel,
+                // priority: JobHelper.getJobPriority(job),
+                // progressMessage: JobHelper.getProgressMessage(job),
             },
-            queue: queueStats,
+            // queue: queueStats,
             // Additional metadata
             metadata: {
                 uploadedAt: new Date().toISOString(),
@@ -106,11 +108,11 @@ router.post("/", ensureUser, uploadMiddleware.single("video"), async (req: Reque
         // Enhanced logging with job details
         console.log(`File uploaded and job created successfully:`, {
             originalName: processedFile.file.originalName,
-            jobId: job.id,
+            jobId: processedFile.jobId,
             userId: req.session.userId!,
             fileSize: JobHelper.formatFileSize(processedFile.file.size),
-            status: job.status,
-            queuePosition: queueStats.queued + 1,
+            // status: job.status,
+            // queuePosition: queueStats.queued + 1,
         });
 
         // Optional: Start monitoring if not already running

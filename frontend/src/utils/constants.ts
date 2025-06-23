@@ -1,7 +1,7 @@
 // src/utils/constants.ts
 export const APP_CONFIG = {
     APP_TITLE: import.meta.env.VITE_APP_TITLE || "Video Processing Pipeline",
-    API_BASE_URL: import.meta.env.VITE_API_BASE_URL || "http://localhost:8000",
+    API_BASE_URL: import.meta.env.VITE_API_BASE_URL || "http://localhost:3000",
     MAX_FILE_SIZE: parseInt(import.meta.env.VITE_MAX_FILE_SIZE) || 1024 * 1024 * 1024, // 1GB
     CHUNK_SIZE: parseInt(import.meta.env.VITE_CHUNK_SIZE) || 1024 * 1024, // 1MB
     MAX_CONCURRENT_UPLOADS: 3,

@@ -22,7 +22,6 @@ export const ensureUser = async (req: Request, res: Response, next: NextFunction
         if (req.session.userId) {
             return next();
         }
-
         // If no user in session, create one using your existing UserModel
         const sessionId = req.sessionID;
 
@@ -32,7 +31,8 @@ export const ensureUser = async (req: Request, res: Response, next: NextFunction
         // Store user info in session
         req.session.userId = user.id;
         req.session.sessionId = user.session_id;
-
+        console.log(req.originalUrl);
+        console.log(req.session);
         next();
     } catch (error) {
         console.error("Error in ensureUser middleware:", error);
