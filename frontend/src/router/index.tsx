@@ -1,5 +1,7 @@
 import Layout from "@/components/layouts";
 import Dashboard from "@/components/pages/Dashboard";
+import JobsPage from "@/components/pages/Jobs";
+import VideoProcessingMonitor from "@/components/pages/Monitoring";
 import UploadPage from "@/components/pages/Upload";
 import { createBrowserRouter, Navigate } from "react-router-dom";
 
@@ -22,7 +24,7 @@ export const router = createBrowserRouter([
             },
             {
                 path: "jobs",
-                // element: <Jobs />,
+                element: <JobsPage />,
             },
             {
                 path: "jobs/:jobId",
@@ -30,7 +32,7 @@ export const router = createBrowserRouter([
             },
             {
                 path: "monitoring",
-                // element: <Monitoring />,
+                element: <VideoProcessingMonitor />,
             },
         ],
     },

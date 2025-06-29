@@ -22,7 +22,7 @@ router.post("/", ensureUser, uploadMiddleware.single("video"), async (req: Reque
             return;
         }
 
-        console.log(req.file, "userId", req.session.userId, "sessionId", req.sessionID, req.session.sessionId);
+        console.log(req.file);
 
         // Validate the uploaded file
         const isValid = await uploadService.validateUploadedFile(req.file.path);

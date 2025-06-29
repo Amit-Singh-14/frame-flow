@@ -31,6 +31,7 @@ const createSessionApi = async (): Promise<User> => {
 
 const getCurrentUserAPI = async (): Promise<User> => {
     const response = await api.get(API_ENDPOINTS.getCurrentUser);
+    localStorage.setItem("sessionId", response.data.user.sessionId);
     return response.data.user;
 };
 
@@ -65,7 +66,6 @@ export const SessionProvider = ({ children }: SessionProviderProps) => {
     // mutation to create new session
     const createSessionMutation = useMutation({
         mutationFn: createSessionApi,
-        retry: 1,
         retryDelay: 10000,
         onSuccess: (newUser) => {
             setSessionId(newUser.sessionId);

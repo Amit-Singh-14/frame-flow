@@ -26,6 +26,7 @@ export class UserService {
         if (!req.session.userId) {
             return null;
         }
+        console.log(req.session.userId);
 
         return this.getById(req.session.userId);
     }

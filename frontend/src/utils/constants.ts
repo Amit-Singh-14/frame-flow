@@ -1,3 +1,5 @@
+import { Monitor, Smartphone, Tv } from "lucide-react";
+
 // src/utils/constants.ts
 export const APP_CONFIG = {
     APP_TITLE: import.meta.env.VITE_APP_TITLE || "Video Processing Pipeline",
@@ -15,27 +17,39 @@ export const SUPPORTED_FORMATS = {
     OUTPUT: ["mp4", "avi", "mov", "wmv", "webm", "mkv", "flv", "mp3", "wav", "gif"],
 } as const;
 
-export const QUALITY_PRESETS = {
-    low: {
-        label: "Low Quality",
-        description: "Fastest processing, smaller file size",
-        bitrate: 500,
-        fps: 24,
-    },
-    medium: {
-        label: "Medium Quality",
-        description: "Balanced quality and file size",
-        bitrate: 1000,
-        fps: 30,
-    },
-    high: {
-        label: "High Quality",
-        description: "Best quality, larger file size",
-        bitrate: 5000,
-        fps: 60,
-    },
-} as const;
+export const OUTPUT_FORMATS = [
+    { value: "mp4", label: "MP4", description: "Most compatible format" },
+    { value: "avi", label: "AVI", description: "High quality, larger files" },
+    { value: "mov", label: "MOV", description: "Apple QuickTime format" },
+] as const;
 
+export const ACCEPTED_FORMATS = ["mp4", "avi", "mov", "wmv", "flv", "webm", "mkv"] as const;
+export type AcceptedFormat = (typeof ACCEPTED_FORMATS)[number];
+export type AcceptedQuality = "1080p" | "720p" | "480p";
+
+export const QUALITY_PRESETS = [
+    {
+        value: "1080p",
+        label: "Full HD (1080p)",
+        description: "1920×1080 • Best quality",
+        icon: Monitor,
+        fileSize: "Large files",
+    },
+    {
+        value: "720p",
+        label: "HD (720p)",
+        description: "1280×720 • Good balance",
+        icon: Tv,
+        fileSize: "Medium files",
+    },
+    {
+        value: "480p",
+        label: "SD (480p)",
+        description: "854×480 • Smaller files",
+        icon: Smartphone,
+        fileSize: "Small files",
+    },
+] as const;
 export const RESOLUTION_PRESETS = [
     { label: "480p", value: "854x480" },
     { label: "720p", value: "1280x720" },

@@ -431,7 +431,6 @@ export class EnhancedJobService {
      */
     static async getServiceStatistics(userId?: number) {
         try {
-            console.error(userId);
             const queueStats = this.getQueueStats();
             const monitoringStats = await JobMonitor.getMonitoringStats();
             const monitoringStatus = JobMonitor.getMonitoringStatus();

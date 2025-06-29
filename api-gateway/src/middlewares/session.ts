@@ -1,12 +1,27 @@
 import session from "express-session";
 import { Request, Response, NextFunction } from "express";
 import { UserModel } from "@/models/User";
+import { createClient } from "redis";
+import { RedisStore } from "connect-redis";
+
+const redisClient = createClient({
+    socket: {
+        host: process.env.REDIS_HOST || "127.0.0.1",
+        port: Number(process.env.REDIS_PORT) || 6379,
+    },
+});
+
+redisClient
+    .connect()
+    .then(() => console.log("connected to redis"))
+    .catch(console.error);
 
 // Session middleware configuration
 export const sessionMiddleware = session({
+    store: new RedisStore({ client: redisClient }),
     secret: process.env.SESSION_SECRET || "your-secret-key-change-in-production",
     resave: false,
-    saveUninitialized: true,
+    saveUninitialized: false,
     cookie: {
         secure: process.env.NODE_ENV === "production", // HTTPS only in production
         httpOnly: true,
@@ -19,6 +34,7 @@ export const sessionMiddleware = session({
 export const ensureUser = async (req: Request, res: Response, next: NextFunction) => {
     try {
         // If user already exists in session, continue
+        console.log("userId", req.headers.cookie);
         if (req.session.userId) {
             return next();
         }
