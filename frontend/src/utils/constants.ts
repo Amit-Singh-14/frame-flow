@@ -135,3 +135,17 @@ export const formatRelativeTime = (dateString: string): string => {
     if (minutes > 0) return `${minutes} minute${minutes > 1 ? "s" : ""} ago`;
     return "Just now";
 };
+
+export const validateFile = (file: File): string | null => {
+    const fileExtension = file.name.split(".").pop()?.toLowerCase();
+    console.log(fileExtension);
+    if (!fileExtension || !ACCEPTED_FORMATS.includes(fileExtension as AcceptedFormat)) {
+        return `File format not supported. Please use: ${ACCEPTED_FORMATS.join(", ")}`;
+    }
+
+    if (file.size > APP_CONFIG.MAX_FILE_SIZE) {
+        return "File size must be less than 100MB";
+    }
+
+    return null;
+};

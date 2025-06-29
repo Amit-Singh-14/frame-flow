@@ -15,10 +15,12 @@ import {
     formatFileSize,
     OUTPUT_FORMATS,
     QUALITY_PRESETS,
+    validateFile,
     type AcceptedFormat,
     type AcceptedQuality,
 } from "@/utils/constants";
 import api, { API_ENDPOINTS } from "@/services/api";
+import { useMutation } from "@tanstack/react-query";
 
 interface SelectedFile {
     file: File;
@@ -48,20 +50,6 @@ const UploadPage: React.FC = () => {
     const [isVideoPlaying, setIsVideoPlaying] = useState(false);
     const [validationError, setValidationError] = useState<string | null>(null);
     const [isUploading, setIsUploading] = useState(false);
-
-    const validateFile = (file: File): string | null => {
-        const fileExtension = file.name.split(".").pop()?.toLowerCase();
-        console.log(fileExtension);
-        if (!fileExtension || !ACCEPTED_FORMATS.includes(fileExtension as AcceptedFormat)) {
-            return `File format not supported. Please use: ${ACCEPTED_FORMATS.join(", ")}`;
-        }
-
-        if (file.size > APP_CONFIG.MAX_FILE_SIZE) {
-            return "File size must be less than 100MB";
-        }
-
-        return null;
-    };
 
     const onDrop = useCallback((acceptedFiles: File[], fileRejections: FileRejection[]) => {
         const file = acceptedFiles[0];
@@ -94,39 +82,50 @@ const UploadPage: React.FC = () => {
         maxSize: APP_CONFIG.MAX_FILE_SIZE,
     });
 
+    const uploadMutation = useMutation<UploadResponse, Error, FormData>({
+        mutationFn: async (formData: FormData) => {
+            setIsUploading(true);
+            setUploadResponse(null);
+            setUploadProgress(0);
+            const response = await api.post(API_ENDPOINTS.upload, formData, {
+                headers: {
+                    "Content-Type": "multipart/form-data",
+                },
+                onUploadProgress: (progressEvent) => {
+                    if (progressEvent.total) {
+                        const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+                        setUploadProgress(percentCompleted);
+                    }
+                },
+            });
+
+            return response.data;
+        },
+        onSuccess: (data) => {
+            setIsUploading(false);
+            setUploadResponse(data);
+            setUploadProgress(100);
+        },
+        onError: (error) => {
+            console.error("Upload failed:", error);
+            setIsUploading(false);
+            setUploadProgress(0);
+            setUploadResponse(null);
+        },
+    });
+
     const handleUpload = async () => {
         if (!selectedFile) return;
-
-        setIsUploading(true);
-        setUploadResponse(null);
-        setUploadProgress(0);
 
         window.scrollTo({
             top: 0,
         });
 
-        try {
-            const formData = new FormData();
-            formData.append("video", selectedFile.file);
-            formData.append("quality", JSON.stringify(conversionSettings));
+        const formData = new FormData();
+        formData.append("video", selectedFile.file);
+        formData.append("quality", JSON.stringify(conversionSettings));
 
-            const response = await api.post(API_ENDPOINTS.upload, formData, {
-                headers: {
-                    "Content-Type": "multipart/form-data",
-                },
-            });
-            console.log(response);
-
-            setUploadProgress(100);
-            setUploadResponse({
-                job: { id: `job_${Date.now()}` },
-            });
-        } catch (error) {
-            console.error("Upload failed:", error);
-        } finally {
-            setIsUploading(false);
-            // clearInterval(progressInterval);
-        }
+        uploadMutation.mutate(formData);
     };
 
     const removeFile = () => {
