@@ -3,23 +3,34 @@
 // Job related types
 export interface Job {
     id: string;
-    sessionId: string;
-    filename: string;
-    originalName: string;
-    fileSize: number;
-    mimeType: string;
-    status: JobStatus;
-    progress: number;
+    title: string;
+    status: "queued" | "processing" | "completed" | "failed";
+    statusDescription: string;
+    healthStatus: "healthy" | "unhealthy" | "in-progress" | "waiting";
+    age: string;
     createdAt: string;
-    updatedAt: string;
-    startedAt?: string;
-    completedAt?: string;
-    failedAt?: string;
-    conversionSettings: ConversionSettings;
-    outputFiles?: OutputFile[];
-    error?: string;
-    retryCount: number;
-    maxRetries: number;
+    completedAt: string | null;
+    duration: number | null;
+    jobType: string;
+    tags: string[];
+    fileName: string;
+    formattedFileSize: string;
+    resolution: string;
+    previewUrl: string | null;
+    thumbnailUrl: string | null;
+    progressSteps: {
+        step: string;
+        timestamp: string;
+    }[];
+    actions: {
+        canRetry: boolean;
+        canDelete: boolean;
+    };
+    error?: {
+        message: string;
+        code: string;
+        retriable: boolean;
+    };
 }
 
 export type JobStatus = "pending" | "queued" | "processing" | "completed" | "failed" | "cancelled";
