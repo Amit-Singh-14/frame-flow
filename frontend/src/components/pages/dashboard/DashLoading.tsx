@@ -1,10 +1,15 @@
+import DashHeader from "./DashHeader";
+import DashUploadBtn from "./DashUploadBtn";
+
 function DashLoading() {
     return (
-        <div className="min-h-screen bg-black p-6">
+        <div className="min-h-screen bg-gradient-to-br from-gray-950 via-gray-900 to-gray-950 text-white">
             <div className="max-w-7xl mx-auto">
+                <DashHeader />
+                <DashUploadBtn />
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
                     {[...Array(4)].map((_, i) => (
-                        <div key={i} className="h-32 bg-blue-900/20 backdrop-blur-md rounded-xl animate-pulse border border-blue-800/30" />
+                        <div key={i} className="h-32 bg-white/10 backdrop-blur-md border-white/20 rounded-xl animate-pulse border " />
                     ))}
                 </div>
             </div>
