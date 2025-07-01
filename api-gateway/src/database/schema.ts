@@ -1,4 +1,3 @@
-import { ERROR } from "sqlite3";
 import { db } from "./connection";
 
 export const initialzeDatabase = async (): Promise<void> => {
@@ -12,20 +11,73 @@ export const initialzeDatabase = async (): Promise<void> => {
             )
         `);
 
+        // Create videos table
+        await db.run(`
+            CREATE TABLE IF NOT EXISTS videos (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                title TEXT,
+                file_name TEXT NOT NULL,
+                input_file TEXT NOT NULL, -- Absolute or relative URI to the uploaded file
+                file_size INTEGER,
+                format TEXT,
+                duration INTEGER, -- In seconds
+                resolution TEXT,
+                thumbnail_url TEXT,
+                preview_url TEXT,
+                uploaded_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                is_active BOOLEAN DEFAULT 1,
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+            );
+        `);
+
         // Create jobs table
         await db.run(`
             CREATE TABLE IF NOT EXISTS jobs (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 user_id INTEGER NOT NULL,
-                status TEXT DEFAULT 'pending' CHECK(status IN ('pending', 'processing', 'completed', 'failed')),
-                input_file TEXT NOT NULL,
-                output_file TEXT,
-                error_message TEXT,
-                conversion_settings TEXT, -- JSON string for conversion parameters
-                file_size INTEGER,
+                video_id INTEGER NOT NULL,
+                title TEXT,
+                
+                status TEXT NOT NULL CHECK(status IN (
+                    'pending', 'queued', 'processing', 'completed', 'failed', 'cancelled'
+                )),
+                
+                health_status TEXT CHECK(health_status IN (
+                    'healthy', 'unhealthy', 'in-progress', 'waiting'
+                )),
+                
+                status_description TEXT,
+                job_type TEXT CHECK(job_type IN (
+                    'transcode', 'compress', 'resize', 'change-framerate', 'convert-container'
+                )),
+
+                tags TEXT, -- e.g., "promo,hd,client-a" OR '["promo", "hd", "client-a"]' (JSON)
+
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                started_at DATETIME,
                 completed_at DATETIME,
-                FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+                updated_at DATETIME,
+
+                duration INTEGER, -- in seconds
+                file_name TEXT,
+                file_size INTEGER,
+                resolution TEXT,
+
+                output_file TEXT,
+                preview_url TEXT,
+                thumbnail_url TEXT,
+
+                retry_count INTEGER DEFAULT 0,
+                priority INTEGER DEFAULT 0,
+                worker_id TEXT,
+
+                error_message TEXT,
+                error_code TEXT,
+                error_retriable BOOLEAN,
+
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+                FOREIGN KEY (video_id) REFERENCES videos(id) ON DELETE CASCADE
             )
         `);
 

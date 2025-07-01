@@ -8,6 +8,8 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Progress } from "@/components/ui/progress";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
+import { useMutation } from "@tanstack/react-query";
+import api, { API_ENDPOINTS } from "@/services/api";
 
 // Job Types Configuration
 const BASIC_JOB_TYPES = ["transcode", "compress", "resize", "change-framerate", "convert-container"] as const;
@@ -164,35 +166,52 @@ const UploadPage: React.FC = () => {
         maxSize: MAX_FILE_SIZE,
     });
 
-    const handleUpload = async () => {
-        if (!selectedFile) return;
+    const uploadMutation = useMutation<UploadResponse, Error, FormData>({
+        mutationFn: async (formData: FormData) => {
+            setStep("process");
+            setIsUploading(true);
+            setUploadProgress(0);
 
-        setStep("process");
-        setIsUploading(true);
-        setUploadProgress(0);
-
-        // Simulate upload progress
-        const interval = setInterval(() => {
-            setUploadProgress((prev) => {
-                if (prev >= 95) {
-                    clearInterval(interval);
-                    return prev;
-                }
-                return prev + Math.random() * 10;
-            });
-        }, 200);
-
-        // Simulate API call
-        setTimeout(() => {
-            clearInterval(interval);
-            setUploadProgress(100);
-            setIsUploading(false);
-            setUploadResponse({
-                job: {
-                    id: `job_${Date.now()}`,
+            const response = await api.post(API_ENDPOINTS.upload, formData, {
+                headers: {
+                    "Content-Type": "multipart/form-data",
+                },
+                onUploadProgress: (progressEvent) => {
+                    if (progressEvent.total) {
+                        const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+                        setUploadProgress(percentCompleted);
+                    }
                 },
             });
-        }, 3000);
+
+            return response.data;
+        },
+        onSuccess: (data) => {
+            setIsUploading(false);
+            setUploadResponse(data);
+            setUploadProgress(100);
+        },
+        onError: (error) => {
+            console.error("Upload failed:", error);
+            setIsUploading(false);
+            setUploadProgress(0);
+            setUploadResponse(null);
+        },
+    });
+
+    const handleUpload = async () => {
+        if (!selectedFile) return;
+        const formData = new FormData();
+        formData.append("video", selectedFile.file);
+        formData.append(
+            "quality",
+            JSON.stringify({
+                jobType: selectedJobType,
+                option: selectedJobOption,
+            })
+        );
+
+        uploadMutation.mutate(formData);
     };
 
     const removeFile = () => {

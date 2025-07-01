@@ -1,5 +1,5 @@
 import { JobModel } from "@/models/Job";
-import { Job, JobStatus } from "@/types";
+import { Job, JobResponse, JobStatus, JobType } from "@/types";
 import { FileUtils } from "@/utils/file";
 import { JobQueue } from "@/utils/jobQueue";
 import { JobMonitor } from "./jobMonitor";
@@ -19,7 +19,7 @@ export interface PaginationOptions {
 }
 
 export interface JobListResponse {
-    jobs: Job[];
+    jobs: JobResponse[];
     pagination: {
         currentPage: number;
         totalPages: number;
@@ -200,10 +200,10 @@ export class EnhancedJobService {
         pagination: PaginationOptions = { page: 1, limit: 10 }
     ): Promise<JobListResponse> {
         try {
-            let jobs = await JobModel.findByUserId(userId);
+            const jobs = await JobModel.findByUserId(userId);
 
             // Apply filters
-            jobs = this.applyFilter(jobs, filters);
+            const jobsResponse = this.applyFilter(jobs, filters);
 
             // Calculate statistics before pagination
             const statistics = JobHelper.getJobListStatistics(jobs);
@@ -215,7 +215,7 @@ export class EnhancedJobService {
             const paginatedJobs = jobs.slice(offset, offset + pagination.limit);
 
             return {
-                jobs: paginatedJobs,
+                jobs: jobsResponse,
                 pagination: {
                     currentPage: pagination.page,
                     totalPages,
@@ -503,7 +503,7 @@ export class EnhancedJobService {
     }
 
     // Inherit existing methods from original JobService
-    private static applyFilter(jobs: Job[], filters: JobFilters): Job[] {
+    private static applyFilter(jobs: Job[], filters: JobFilters): JobResponse[] {
         let filteredJobs = [...jobs];
 
         if (filters.status) {
@@ -527,7 +527,7 @@ export class EnhancedJobService {
             );
         }
 
-        return filteredJobs;
+        return filteredJobs.map(mapJobToJobResponse);
     }
 
     // Queue management methods
@@ -547,3 +547,29 @@ export class EnhancedJobService {
         return this.jobQueue.isProcessing(jobId);
     }
 }
+
+const mapJobToJobResponse = (job: Job): JobResponse => {
+    return {
+        id: job.id,
+        title: job.input_file.split("/").pop() || job.input_file,
+        fileName: job.input_file,
+        status: job.status,
+        error: job.error_message,
+        jobType: job.conversion_settings as JobType, // or map it from jobType if you have it separately
+        formattedFileSize: FileUtils.formatFileSize(job.file_size),
+        resolution: "720x1280", // write your own resolution extractor
+        age: formatAge(job.created_at), // e.g., "2h ago"
+    };
+};
+
+const formatAge = (dateStr: string): string => {
+    const createdAt = new Date(dateStr);
+    const now = new Date();
+    const diffMs = now.getTime() - createdAt.getTime();
+    const diffMin = Math.floor(diffMs / 60000);
+    if (diffMin < 60) return `${diffMin}m ago`;
+    const diffHrs = Math.floor(diffMin / 60);
+    if (diffHrs < 24) return `${diffHrs}h ago`;
+    const diffDays = Math.floor(diffHrs / 24);
+    return `${diffDays}d ago`;
+};
