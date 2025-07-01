@@ -2,7 +2,7 @@ import { JobModel } from "@/models/Job";
 import { JobStatus } from "@/types";
 import { UploadFile } from "@/types/upload";
 import { FileUtils } from "@/utils/file";
-import { JobService } from "./jobService";
+import { EnhancedJobService } from "./jobService";
 
 export class UploadSerice {
     async processUploadFile(file: Express.Multer.File, userId: number): Promise<{ file: UploadFile; jobId: number }> {
@@ -13,9 +13,10 @@ export class UploadSerice {
                 mimetype: file.mimetype,
                 size: file.size,
                 path: file.path,
+                formattedSize: FileUtils.formatFileSize(file.size),
             };
 
-            const job = await JobService.createJob({
+            const job = await EnhancedJobService.createJob({
                 user_id: userId,
                 input_file: file.path,
                 file_size: file.size,
@@ -31,7 +32,8 @@ export class UploadSerice {
             };
         } catch (error) {
             // if job createion fails, clean up the uploaded file
-            await FileUtils.deleteFile(file.path);
+            // await FileUtils.deleteFile(file.path);
+            console.error(error);
             throw error;
         }
     }

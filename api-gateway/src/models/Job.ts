@@ -84,6 +84,7 @@ export class JobModel {
         processing: number;
         completed: number;
         failed: number;
+        totalStorage: number;
     }> {
         try {
             const stats = await db.get(
@@ -93,9 +94,10 @@ export class JobModel {
                     SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) as pending,
                     SUM(CASE WHEN status = 'processing' THEN 1 ELSE 0 END) as processing,
                     SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completed,
-                    SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) as failed
-                    FROM jobs 
-                    WHERE user_id = ?
+                    SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) as failed,
+                    SUM(file_size) as totalStorage
+                FROM jobs 
+                WHERE user_id = ?
                 `,
                 [userId]
             );
@@ -106,6 +108,7 @@ export class JobModel {
                 processing: stats.processing || 0,
                 completed: stats.completed || 0,
                 failed: stats.failed || 0,
+                totalStorage: stats.totalStorage || 0,
             };
         } catch (error) {
             console.error("Error getting job stats:", error);

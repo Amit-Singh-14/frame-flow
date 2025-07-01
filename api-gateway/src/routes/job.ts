@@ -9,6 +9,250 @@ import { Router, Request, Response } from "express";
 
 const router = Router();
 
+// GET /api/jobs - Get user's jobs with enhanced filtering, pagination and statistics
+router.get("/", ensureUser, async (req: Request, res: Response) => {
+    try {
+        // Parse pagination parameters
+        const page = parseInt(req.query.page as string) || 1;
+        const limit = Math.min(parseInt(req.query.limit as string) || 10, 50);
+        const pagination: PaginationOptions = { page, limit };
+
+        // Parse filter parameters
+        const filters: JobFilters = {};
+
+        if (req.query.status && Object.values(JobStatus).includes(req.query.status as JobStatus)) {
+            filters.status = req.query.status as JobStatus;
+        }
+
+        if (req.query.startDate) {
+            filters.startDate = req.query.startDate as string;
+        }
+
+        if (req.query.endDate) {
+            filters.endDate = req.query.endDate as string;
+        }
+
+        if (req.query.search) {
+            filters.search = req.query.search as string;
+        }
+
+        // Get enhanced job list with statistics
+        const result = await EnhancedJobService.getUserJobs(req.session.userId!, filters, pagination);
+
+        // Add monitoring information
+        const queueStats = EnhancedJobService.getQueueStats();
+
+        res.json({
+            success: true,
+            jobs: result.jobs.map((job) => ({
+                ...JobHelper.sanitizeJobForAPI(job),
+                age: JobHelper.getJobAge(job.created_at),
+                statusDescription: JobHelper.getStatusDescription(job.status),
+                healthStatus: JobHelper.determineHealthStatus(job),
+                formattedFileSize: JobHelper.formatFileSize(job.file_size || 0),
+            })),
+            pagination: result.pagination,
+            statistics: result.statistics,
+            queue: queueStats,
+            filters: filters,
+        });
+    } catch (error) {
+        console.error("Error fetching user jobs:", error);
+        res.status(500).json({
+            success: false,
+            error: "Failed to fetch jobs",
+            code: "FETCH_ERROR",
+        });
+    }
+});
+
+// GET /api/jobs/stats - Enhanced user statistics with health monitoring
+router.get("/stats", ensureUser, async (req: Request, res: Response) => {
+    try {
+        // Get enhanced service statistics
+        const serviceStats = await EnhancedJobService.getServiceStatistics(req.session.userId!);
+
+        // Get monitoring statistics
+        const monitoringStats = await JobMonitor.getMonitoringStats();
+
+        // Get recent jobs with enhanced info
+        const recentJobs = await EnhancedJobService.getUserJobs(req.session.userId!, {}, { page: 1, limit: 5 });
+
+        // Get jobs with status details
+        const jobsWithDetails = await JobStatusManger.getJobsWithStatusDetails(req.session.userId!);
+
+        res.json({
+            success: true,
+            stats: {
+                ...serviceStats,
+                monitoring: {
+                    totalJobs: monitoringStats.totalJobs,
+                    healthyJobs: monitoringStats.healtyJobs,
+                    unhealthyJobs: monitoringStats.unhealtyJobs,
+                    stuckJobs: monitoringStats.stuckJobs,
+                    orphanedFiles: monitoringStats.orphanedFiles,
+                    lastMonitorRun: monitoringStats.lastMonitorRun,
+                },
+            },
+            recentJobs: recentJobs.jobs.map((job) => ({
+                ...JobHelper.sanitizeJobForAPI(job),
+                age: JobHelper.getJobAge(job.created_at),
+                statusDescription: JobHelper.getStatusDescription(job.status),
+                healthStatus: JobHelper.determineHealthStatus(job),
+                formattedFileSize: JobHelper.formatFileSize(job.file_size || 0),
+            })),
+            jobsWithDetails: jobsWithDetails.slice(0, 10), // Latest 10 with full details
+        });
+    } catch (error) {
+        console.error("Error fetching enhanced job statistics:", error);
+        res.status(500).json({
+            success: false,
+            error: "Failed to fetch job statistics",
+            code: "STATS_ERROR",
+        });
+    }
+});
+
+// GET /api/jobs/queue/status - Enhanced queue status with monitoring
+router.get("/queue/status", ensureUser, async (req: Request, res: Response) => {
+    try {
+        const queueStats = EnhancedJobService.getQueueStats();
+        const nextJob = EnhancedJobService.getNextJobInQueue();
+        const monitoringStatus = JobMonitor.getMonitoringStatus();
+
+        res.json({
+            success: true,
+            queue: {
+                ...queueStats,
+                nextJobId: nextJob,
+            },
+            monitoring: monitoringStatus,
+        });
+    } catch (error) {
+        console.error("Error fetching enhanced queue status:", error);
+        res.status(500).json({
+            success: false,
+            error: "Failed to fetch queue status",
+            code: "QUEUE_ERROR",
+        });
+    }
+});
+
+// NEW ENDPOINTS FOR ENHANCED MONITORING
+
+// GET /api/jobs/health/check - Run health check on user's jobs
+router.get("/health/check", ensureUser, async (req: Request, res: Response) => {
+    try {
+        const healthChecks = await JobMonitor.runHealthCheck();
+
+        // Filter for user's jobs only
+        const userJobs = await JobModel.findByUserId(req.session.userId!);
+        const userJobIds = userJobs.map((job) => job.id);
+        const userHealthChecks = healthChecks.filter((check) => userJobIds.includes(check.jobId));
+
+        res.json({
+            success: true,
+            healthChecks: userHealthChecks,
+            summary: {
+                total: userHealthChecks.length,
+                healthy: userHealthChecks.filter((check) => check.isHealty).length,
+                unhealthy: userHealthChecks.filter((check) => !check.isHealty).length,
+            },
+        });
+    } catch (error) {
+        console.error("Error running health check:", error);
+        res.status(500).json({
+            success: false,
+            error: "Failed to run health check",
+            code: "HEALTH_CHECK_ERROR",
+        });
+    }
+});
+
+// POST /api/jobs/cleanup/old - Cleanup old jobs (admin-like feature for users)
+router.post("/cleanup/old", ensureUser, async (req: Request, res: Response) => {
+    try {
+        const daysOld = parseInt(req.body.daysOld) || 30;
+        const uploadDirectory = req.body.uploadDirectory;
+
+        const cleanupResult = await EnhancedJobService.cleanupOldJobs(daysOld, uploadDirectory);
+
+        res.json({
+            success: true,
+            message: "Cleanup completed successfully",
+            result: cleanupResult,
+        });
+    } catch (error) {
+        console.error("Error during cleanup:", error);
+        res.status(500).json({
+            success: false,
+            error: "Failed to cleanup old jobs",
+            code: "CLEANUP_ERROR",
+        });
+    }
+});
+
+// GET /api/jobs/health/service - Get overall service health
+router.get("/health/service", ensureUser, async (req: Request, res: Response) => {
+    try {
+        const healthCheck = await EnhancedJobService.performHealthCheck();
+
+        res.json({
+            success: true,
+            health: healthCheck,
+        });
+    } catch (error) {
+        console.error("Error checking service health:", error);
+        res.status(500).json({
+            success: false,
+            error: "Failed to check service health",
+            code: "SERVICE_HEALTH_ERROR",
+        });
+    }
+});
+
+// POST /api/jobs/monitoring/start - Start monitoring (if not already running)
+router.post("/monitoring/start", ensureUser, async (req: Request, res: Response) => {
+    try {
+        JobMonitor.startMonitoring();
+        const status = JobMonitor.getMonitoringStatus();
+
+        res.json({
+            success: true,
+            message: "Job monitoring started",
+            status,
+        });
+    } catch (error) {
+        console.error("Error starting monitoring:", error);
+        res.status(500).json({
+            success: false,
+            error: "Failed to start monitoring",
+            code: "MONITORING_START_ERROR",
+        });
+    }
+});
+
+// POST /api/jobs/monitoring/stop - Stop monitoring
+router.post("/monitoring/stop", ensureUser, async (req: Request, res: Response) => {
+    try {
+        JobMonitor.stopMonitoring();
+        const status = JobMonitor.getMonitoringStatus();
+
+        res.json({
+            success: true,
+            message: "Job monitoring stopped",
+            status,
+        });
+    } catch (error) {
+        console.error("Error stopping monitoring:", error);
+        res.status(500).json({
+            success: false,
+            error: "Failed to stop monitoring",
+            code: "MONITORING_STOP_ERROR",
+        });
+    }
+});
+
 // GET /api/jobs/:id - Get enhanced job details with status history and health info
 router.get("/:id", ensureUser, async (req: Request, res: Response) => {
     try {
@@ -89,59 +333,54 @@ router.get("/:id", ensureUser, async (req: Request, res: Response) => {
     }
 });
 
-// GET /api/jobs - Get user's jobs with enhanced filtering, pagination and statistics
-router.get("/", ensureUser, async (req: Request, res: Response) => {
+// DELETE /api/jobs/:id - Delete job with enhanced cleanup
+router.delete("/:id", ensureUser, async (req: Request, res: Response) => {
     try {
-        // Parse pagination parameters
-        const page = parseInt(req.query.page as string) || 1;
-        const limit = Math.min(parseInt(req.query.limit as string) || 10, 50);
-        const pagination: PaginationOptions = { page, limit };
+        const jobId = parseInt(req.params.id);
 
-        // Parse filter parameters
-        const filters: JobFilters = {};
-
-        if (req.query.status && Object.values(JobStatus).includes(req.query.status as JobStatus)) {
-            filters.status = req.query.status as JobStatus;
+        if (isNaN(jobId)) {
+            res.status(400).json({
+                success: false,
+                error: "Invalid job ID",
+                code: "INVALID_JOB_ID",
+            });
+            return;
         }
 
-        if (req.query.startDate) {
-            filters.startDate = req.query.startDate as string;
-        }
-
-        if (req.query.endDate) {
-            filters.endDate = req.query.endDate as string;
-        }
-
-        if (req.query.search) {
-            filters.search = req.query.search as string;
-        }
-
-        // Get enhanced job list with statistics
-        const result = await EnhancedJobService.getUserJobs(req.session.userId!, filters, pagination);
-
-        // Add monitoring information
-        const queueStats = EnhancedJobService.getQueueStats();
+        await EnhancedJobService.deleteJob(jobId, req.session.userId!);
 
         res.json({
             success: true,
-            jobs: result.jobs.map((job) => ({
-                ...JobHelper.sanitizeJobForAPI(job),
-                age: JobHelper.getJobAge(job.created_at),
-                statusDescription: JobHelper.getStatusDescription(job.status),
-                healthStatus: JobHelper.determineHealthStatus(job),
-                formattedFileSize: JobHelper.formatFileSize(job.file_size || 0),
-            })),
-            pagination: result.pagination,
-            statistics: result.statistics,
-            queue: queueStats,
-            filters: filters,
+            message: "Job deleted successfully",
+            queue: EnhancedJobService.getQueueStats(),
         });
     } catch (error) {
-        console.error("Error fetching user jobs:", error);
+        console.error("Error deleting job:", error);
+
+        if (error instanceof Error) {
+            if (error.message === "Job not found") {
+                res.status(404).json({
+                    success: false,
+                    error: "Job not found",
+                    code: "JOB_NOT_FOUND",
+                });
+                return;
+            }
+
+            if (error.message === "Access denied") {
+                res.status(403).json({
+                    success: false,
+                    error: "Access denied",
+                    code: "ACCESS_DENIED",
+                });
+                return;
+            }
+        }
+
         res.status(500).json({
             success: false,
-            error: "Failed to fetch jobs",
-            code: "FETCH_ERROR",
+            error: "Failed to delete job",
+            code: "DELETE_ERROR",
         });
     }
 });
@@ -297,161 +536,6 @@ router.post("/:id/cancel", ensureUser, async (req: Request, res: Response) => {
     }
 });
 
-// DELETE /api/jobs/:id - Delete job with enhanced cleanup
-router.delete("/:id", ensureUser, async (req: Request, res: Response) => {
-    try {
-        const jobId = parseInt(req.params.id);
-
-        if (isNaN(jobId)) {
-            res.status(400).json({
-                success: false,
-                error: "Invalid job ID",
-                code: "INVALID_JOB_ID",
-            });
-            return;
-        }
-
-        await EnhancedJobService.deleteJob(jobId, req.session.userId!);
-
-        res.json({
-            success: true,
-            message: "Job deleted successfully",
-            queue: EnhancedJobService.getQueueStats(),
-        });
-    } catch (error) {
-        console.error("Error deleting job:", error);
-
-        if (error instanceof Error) {
-            if (error.message === "Job not found") {
-                res.status(404).json({
-                    success: false,
-                    error: "Job not found",
-                    code: "JOB_NOT_FOUND",
-                });
-                return;
-            }
-
-            if (error.message === "Access denied") {
-                res.status(403).json({
-                    success: false,
-                    error: "Access denied",
-                    code: "ACCESS_DENIED",
-                });
-                return;
-            }
-        }
-
-        res.status(500).json({
-            success: false,
-            error: "Failed to delete job",
-            code: "DELETE_ERROR",
-        });
-    }
-});
-
-// GET /api/jobs/stats - Enhanced user statistics with health monitoring
-router.get("/stats", ensureUser, async (req: Request, res: Response) => {
-    try {
-        // Get enhanced service statistics
-        const serviceStats = await EnhancedJobService.getServiceStatistics(req.session.userId!);
-
-        // Get monitoring statistics
-        const monitoringStats = await JobMonitor.getMonitoringStats();
-
-        // Get recent jobs with enhanced info
-        const recentJobs = await EnhancedJobService.getUserJobs(req.session.userId!, {}, { page: 1, limit: 5 });
-
-        // Get jobs with status details
-        const jobsWithDetails = await JobStatusManger.getJobsWithStatusDetails(req.session.userId!);
-
-        res.json({
-            success: true,
-            stats: {
-                ...serviceStats,
-                monitoring: {
-                    totalJobs: monitoringStats.totalJobs,
-                    healthyJobs: monitoringStats.healtyJobs,
-                    unhealthyJobs: monitoringStats.unhealtyJobs,
-                    stuckJobs: monitoringStats.stuckJobs,
-                    orphanedFiles: monitoringStats.orphanedFiles,
-                    lastMonitorRun: monitoringStats.lastMonitorRun,
-                },
-            },
-            recentJobs: recentJobs.jobs.map((job) => ({
-                ...JobHelper.sanitizeJobForAPI(job),
-                age: JobHelper.getJobAge(job.created_at),
-                statusDescription: JobHelper.getStatusDescription(job.status),
-                healthStatus: JobHelper.determineHealthStatus(job),
-                formattedFileSize: JobHelper.formatFileSize(job.file_size || 0),
-            })),
-            jobsWithDetails: jobsWithDetails.slice(0, 10), // Latest 10 with full details
-        });
-    } catch (error) {
-        console.error("Error fetching enhanced job statistics:", error);
-        res.status(500).json({
-            success: false,
-            error: "Failed to fetch job statistics",
-            code: "STATS_ERROR",
-        });
-    }
-});
-
-// GET /api/jobs/queue/status - Enhanced queue status with monitoring
-router.get("/queue/status", ensureUser, async (req: Request, res: Response) => {
-    try {
-        const queueStats = EnhancedJobService.getQueueStats();
-        const nextJob = EnhancedJobService.getNextJobInQueue();
-        const monitoringStatus = JobMonitor.getMonitoringStatus();
-
-        res.json({
-            success: true,
-            queue: {
-                ...queueStats,
-                nextJobId: nextJob,
-            },
-            monitoring: monitoringStatus,
-        });
-    } catch (error) {
-        console.error("Error fetching enhanced queue status:", error);
-        res.status(500).json({
-            success: false,
-            error: "Failed to fetch queue status",
-            code: "QUEUE_ERROR",
-        });
-    }
-});
-
-// NEW ENDPOINTS FOR ENHANCED MONITORING
-
-// GET /api/jobs/health/check - Run health check on user's jobs
-router.get("/health/check", ensureUser, async (req: Request, res: Response) => {
-    try {
-        const healthChecks = await JobMonitor.runHealthCheck();
-
-        // Filter for user's jobs only
-        const userJobs = await JobModel.findByUserId(req.session.userId!);
-        const userJobIds = userJobs.map((job) => job.id);
-        const userHealthChecks = healthChecks.filter((check) => userJobIds.includes(check.jobId));
-
-        res.json({
-            success: true,
-            healthChecks: userHealthChecks,
-            summary: {
-                total: userHealthChecks.length,
-                healthy: userHealthChecks.filter((check) => check.isHealty).length,
-                unhealthy: userHealthChecks.filter((check) => !check.isHealty).length,
-            },
-        });
-    } catch (error) {
-        console.error("Error running health check:", error);
-        res.status(500).json({
-            success: false,
-            error: "Failed to run health check",
-            code: "HEALTH_CHECK_ERROR",
-        });
-    }
-});
-
 // GET /api/jobs/:id/status/history - Get job status history
 router.get("/:id/status/history", ensureUser, async (req: Request, res: Response) => {
     try {
@@ -504,90 +588,6 @@ router.get("/:id/status/history", ensureUser, async (req: Request, res: Response
             success: false,
             error: "Failed to fetch status history",
             code: "STATUS_HISTORY_ERROR",
-        });
-    }
-});
-
-// POST /api/jobs/cleanup/old - Cleanup old jobs (admin-like feature for users)
-router.post("/cleanup/old", ensureUser, async (req: Request, res: Response) => {
-    try {
-        const daysOld = parseInt(req.body.daysOld) || 30;
-        const uploadDirectory = req.body.uploadDirectory;
-
-        const cleanupResult = await EnhancedJobService.cleanupOldJobs(daysOld, uploadDirectory);
-
-        res.json({
-            success: true,
-            message: "Cleanup completed successfully",
-            result: cleanupResult,
-        });
-    } catch (error) {
-        console.error("Error during cleanup:", error);
-        res.status(500).json({
-            success: false,
-            error: "Failed to cleanup old jobs",
-            code: "CLEANUP_ERROR",
-        });
-    }
-});
-
-// GET /api/jobs/health/service - Get overall service health
-router.get("/health/service", ensureUser, async (req: Request, res: Response) => {
-    try {
-        const healthCheck = await EnhancedJobService.performHealthCheck();
-
-        res.json({
-            success: true,
-            health: healthCheck,
-        });
-    } catch (error) {
-        console.error("Error checking service health:", error);
-        res.status(500).json({
-            success: false,
-            error: "Failed to check service health",
-            code: "SERVICE_HEALTH_ERROR",
-        });
-    }
-});
-
-// POST /api/jobs/monitoring/start - Start monitoring (if not already running)
-router.post("/monitoring/start", ensureUser, async (req: Request, res: Response) => {
-    try {
-        JobMonitor.startMonitoring();
-        const status = JobMonitor.getMonitoringStatus();
-
-        res.json({
-            success: true,
-            message: "Job monitoring started",
-            status,
-        });
-    } catch (error) {
-        console.error("Error starting monitoring:", error);
-        res.status(500).json({
-            success: false,
-            error: "Failed to start monitoring",
-            code: "MONITORING_START_ERROR",
-        });
-    }
-});
-
-// POST /api/jobs/monitoring/stop - Stop monitoring
-router.post("/monitoring/stop", ensureUser, async (req: Request, res: Response) => {
-    try {
-        JobMonitor.stopMonitoring();
-        const status = JobMonitor.getMonitoringStatus();
-
-        res.json({
-            success: true,
-            message: "Job monitoring stopped",
-            status,
-        });
-    } catch (error) {
-        console.error("Error stopping monitoring:", error);
-        res.status(500).json({
-            success: false,
-            error: "Failed to stop monitoring",
-            code: "MONITORING_STOP_ERROR",
         });
     }
 });
