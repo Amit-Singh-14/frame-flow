@@ -1,6 +1,6 @@
 import session from "express-session";
 import { Request, Response, NextFunction } from "express";
-import { UserModel } from "@/models/User";
+import { UserModel } from "@/Repository/User";
 import { createClient } from "redis";
 import { RedisStore } from "connect-redis";
 

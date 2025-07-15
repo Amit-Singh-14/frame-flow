@@ -1,6 +1,6 @@
 import { Request, Response } from "express";
 import { jobService } from "../services/jobService";
-import { Job } from "@/models/Job";
+import { Job } from "@/Repository/Job";
 import { Router } from "express";
 import { ensureUser } from "@/middlewares/session";
 import { db } from "@/database/connection";

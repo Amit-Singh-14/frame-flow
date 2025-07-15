@@ -41,7 +41,7 @@ export interface UpdateVideoData {
 
 const connection = db.getDb();
 
-export class VideoModel {
+export class VideoRepository {
     static async create(data: CreateVideoData): Promise<Video> {
         const query = `
             INSERT INTO videos (

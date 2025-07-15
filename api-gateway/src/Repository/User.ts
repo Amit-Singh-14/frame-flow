@@ -1,7 +1,7 @@
 import { db } from "@/database/connection";
 import { User } from "@/types";
 
-export class UserModel {
+export class UserRepository {
     static async findBySessionId(sessionId: string): Promise<User | null> {
         try {
             const user = await db.get("SELECT * FROM users WHERE session_id = ?", [sessionId]);

@@ -56,7 +56,7 @@ export interface CreateJobData {
     error_retriable?: boolean;
 }
 
-export class JobModel {
+export class JobRepository {
     static async create(jobData: CreateJobData): Promise<Job> {
         try {
             const result = await db.run(

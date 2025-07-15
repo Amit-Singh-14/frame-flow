@@ -1,5 +1,5 @@
-import { UserModel } from "./models/User";
-import { JobModel } from "./models/Job";
+import { UserModel } from "./Repository/User";
+import { JobModel } from "./Repository/Job";
 import { JobStatus } from "./types";
 import { initialzeDatabase } from "./database/schema";
 

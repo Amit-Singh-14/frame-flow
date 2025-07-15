@@ -1,4 +1,4 @@
-import { CreateJobData, Job, JobModel } from "@/models/Job";
+import { CreateJobData, Job, JobRepository } from "@/Repository/Job";
 
 export interface JobQueueInterface {
     addJob(jobId: number, priority?: number): Promise<void>;
@@ -18,7 +18,7 @@ export class JobService {
      */
     async create(jobData: CreateJobData): Promise<Job> {
         try {
-            const job = await JobModel.create(jobData);
+            const job = await JobRepository.create(jobData);
             console.log(`Job created with ID: ${job.id}`);
             return job;
         } catch (error) {
@@ -33,14 +33,14 @@ export class JobService {
     async queueJob(jobId: number): Promise<void> {
         try {
             // Update job status to queued
-            await JobModel.updateStatus(jobId, "queued", {
+            await JobRepository.updateStatus(jobId, "queued", {
                 statusDescription: "Job queued for processing",
                 healthStatus: "waiting",
             });
 
             // Add to job queue if available
             if (this.jobQueue) {
-                const job = await JobModel.findById(jobId);
+                const job = await JobRepository.findById(jobId);
                 if (job) {
                     await this.jobQueue.addJob(jobId, job.priority);
                 }
@@ -50,7 +50,7 @@ export class JobService {
         } catch (error) {
             console.error(`Error queuing job ${jobId}:`, error);
             // Revert status back to pending if queueing fails
-            await JobModel.updateStatus(jobId, "pending", {
+            await JobRepository.updateStatus(jobId, "pending", {
                 statusDescription: "Failed to queue job",
                 errorMessage: "Job queueing failed",
             });
@@ -63,7 +63,7 @@ export class JobService {
      */
     async startJob(jobId: number, workerId: string): Promise<void> {
         try {
-            await JobModel.updateStatus(jobId, "processing", {
+            await JobRepository.updateStatus(jobId, "processing", {
                 workerId,
                 statusDescription: "Job is being processed",
                 healthStatus: "in-progress",
@@ -88,7 +88,7 @@ export class JobService {
         }
     ): Promise<void> {
         try {
-            await JobModel.updateStatus(jobId, "completed", {
+            await JobRepository.updateStatus(jobId, "completed", {
                 outputFile,
                 previewUrl: options?.previewUrl,
                 thumbnailUrl: options?.thumbnailUrl,
@@ -108,7 +108,7 @@ export class JobService {
      */
     async failJob(jobId: number, errorMessage: string, errorCode?: string, errorRetriable: boolean = false): Promise<void> {
         try {
-            await JobModel.updateStatus(jobId, "failed", {
+            await JobRepository.updateStatus(jobId, "failed", {
                 errorMessage,
                 errorCode,
                 errorRetriable,
@@ -128,7 +128,7 @@ export class JobService {
      */
     async cancelJob(jobId: number, reason?: string): Promise<void> {
         try {
-            await JobModel.updateStatus(jobId, "cancelled", {
+            await JobRepository.updateStatus(jobId, "cancelled", {
                 statusDescription: reason || "Job cancelled by user",
                 healthStatus: "unhealthy",
             });
@@ -148,7 +148,7 @@ export class JobService {
     // Retry a failed job
     async retryJob(jobId: number): Promise<void> {
         try {
-            const job = await JobModel.findById(jobId);
+            const job = await JobRepository.findById(jobId);
             if (!job) {
                 throw new Error("Job not found");
             }
@@ -158,10 +158,10 @@ export class JobService {
             }
 
             // Increment retry count
-            await JobModel.incrementRetryCount(jobId);
+            await JobRepository.incrementRetryCount(jobId);
 
             // Reset job to pending status
-            await JobModel.updateStatus(jobId, "pending", {
+            await JobRepository.updateStatus(jobId, "pending", {
                 statusDescription: `Job retry attempt ${job.retry_count + 1}`,
                 healthStatus: "waiting",
                 errorMessage: undefined,
@@ -183,7 +183,7 @@ export class JobService {
      */
     async updateJobProgress(jobId: number, healthStatus: Job["health_status"], statusDescription: string): Promise<void> {
         try {
-            await JobModel.updateJobProgress(jobId, healthStatus, statusDescription);
+            await JobRepository.updateJobProgress(jobId, healthStatus, statusDescription);
         } catch (error) {
             console.error(`Error updating job progress ${jobId}:`, error);
             throw new Error("Failed to update job progress");
@@ -195,7 +195,7 @@ export class JobService {
      */
     async getById(jobId: number): Promise<Job | null> {
         try {
-            return await JobModel.findById(jobId);
+            return await JobRepository.findById(jobId);
         } catch (error) {
             console.error(`Error getting job ${jobId}:`, error);
             throw new Error("Failed to get job");
@@ -207,7 +207,7 @@ export class JobService {
      */
     async getByUserId(userId: number): Promise<Job[]> {
         try {
-            return await JobModel.findByUserId(userId);
+            return await JobRepository.findByUserId(userId);
         } catch (error) {
             console.error(`Error getting jobs for user ${userId}:`, error);
             throw new Error("Failed to get user jobs");
@@ -219,7 +219,7 @@ export class JobService {
      */
     async getByVideoId(videoId: number): Promise<Job[]> {
         try {
-            return await JobModel.findByVideoId(videoId);
+            return await JobRepository.findByVideoId(videoId);
         } catch (error) {
             console.error(`Error getting jobs for video ${videoId}:`, error);
             throw new Error("Failed to get video jobs");
@@ -235,18 +235,18 @@ export class JobService {
             if (this.jobQueue) {
                 const jobId = await this.jobQueue.getNextJob();
                 if (jobId) {
-                    return await JobModel.findById(jobId);
+                    return await JobRepository.findById(jobId);
                 }
             }
 
             // Fallback to getting queued jobs directly from database
-            const queuedJobs = await JobModel.findQueuedJobs(1);
+            const queuedJobs = await JobRepository.findQueuedJobs(1);
             if (queuedJobs.length > 0) {
                 return queuedJobs[0];
             }
 
             // If no queued jobs, get pending jobs
-            const pendingJobs = await JobModel.findPendingJobs(1);
+            const pendingJobs = await JobRepository.findPendingJobs(1);
             if (pendingJobs.length > 0) {
                 return pendingJobs[0];
             }
@@ -263,7 +263,7 @@ export class JobService {
      */
     async getJobsByStatus(status: Job["status"], limit?: number): Promise<Job[]> {
         try {
-            return await JobModel.findJobsByStatus(status, limit);
+            return await JobRepository.findJobsByStatus(status, limit);
         } catch (error) {
             console.error(`Error getting jobs with status ${status}:`, error);
             throw new Error("Failed to get jobs by status");
@@ -275,7 +275,7 @@ export class JobService {
      */
     async getUserJobStats(userId: number) {
         try {
-            return await JobModel.getJobStats(userId);
+            return await JobRepository.getJobStats(userId);
         } catch (error) {
             console.error(`Error getting job stats for user ${userId}:`, error);
             throw new Error("Failed to get job statistics");
@@ -287,7 +287,7 @@ export class JobService {
      */
     async getRetriableJobs(maxRetries: number = 3): Promise<Job[]> {
         try {
-            return await JobModel.findJobsWithRetries(maxRetries);
+            return await JobRepository.findJobsWithRetries(maxRetries);
         } catch (error) {
             console.error("Error getting retriable jobs:", error);
             throw new Error("Failed to get retriable jobs");
@@ -299,7 +299,7 @@ export class JobService {
      */
     async deleteJob(jobId: number): Promise<void> {
         try {
-            const job = await JobModel.findById(jobId);
+            const job = await JobRepository.findById(jobId);
             if (!job) {
                 throw new Error("Job not found");
             }
@@ -309,7 +309,7 @@ export class JobService {
                 await this.jobQueue.removeJob(jobId);
             }
 
-            await JobModel.delete(jobId);
+            await JobRepository.delete(jobId);
             console.log(`Job ${jobId} deleted successfully`);
         } catch (error) {
             console.error(`Error deleting job ${jobId}:`, error);
@@ -322,7 +322,7 @@ export class JobService {
      */
     async getJobsByWorker(workerId: string): Promise<Job[]> {
         try {
-            return await JobModel.findJobsByWorker(workerId);
+            return await JobRepository.findJobsByWorker(workerId);
         } catch (error) {
             console.error(`Error getting jobs for worker ${workerId}:`, error);
             throw new Error("Failed to get worker jobs");
@@ -358,15 +358,15 @@ export class JobService {
             const cutoffDate = new Date();
             cutoffDate.setDate(cutoffDate.getDate() - daysOld);
 
-            const completedJobs = await JobModel.findJobsByStatus("completed");
-            const failedJobs = await JobModel.findJobsByStatus("failed");
+            const completedJobs = await JobRepository.findJobsByStatus("completed");
+            const failedJobs = await JobRepository.findJobsByStatus("failed");
 
             let deletedCount = 0;
             const jobsToDelete = [...completedJobs, ...failedJobs].filter((job) => new Date(job.created_at) < cutoffDate);
 
             for (const job of jobsToDelete) {
                 try {
-                    await JobModel.delete(job.id);
+                    await JobRepository.delete(job.id);
                     deletedCount++;
                 } catch (deleteError) {
                     console.error(`Failed to delete old job ${job.id}:`, deleteError);
