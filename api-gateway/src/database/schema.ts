@@ -53,7 +53,8 @@ export const initialzeDatabase = async (): Promise<void> => {
                 )),
 
                 tags TEXT, -- e.g., "promo,hd,client-a" OR '["promo", "hd", "client-a"]' (JSON)
-
+                conversion_settings TEXT NOT NULL,
+                
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 started_at DATETIME,
                 completed_at DATETIME,
