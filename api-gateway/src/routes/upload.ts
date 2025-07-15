@@ -1,19 +1,20 @@
 import { ensureUser } from "@/middlewares/session";
-import { handleUploadError, uploadMiddleware } from "@/middlewares/upload";
+import { uploadWithMetadata } from "@/middlewares/upload";
+import { jobService } from "@/services/jobService";
 import { UploadSerice } from "@/services/uploadService";
-import { EnhancedJobService } from "@/services/jobService";
-import { JobHelper } from "@/utils/jobHelper";
+import { videoService } from "@/services/VideoService";
 import { UploadResponse } from "@/types/upload";
+import { VideoMetadataExtractor } from "@/utils/videoMetaExtractor";
 import { Router, Request, Response } from "express";
 
 const router = Router();
 const uploadService = new UploadSerice();
 
 // POST /api/upload - Single file upload endpoint with enhanced job creation
-router.post("/", ensureUser, uploadMiddleware.single("video"), async (req: Request, res: Response) => {
+router.post("/", ensureUser, uploadWithMetadata(), async (req: Request, res: Response) => {
     try {
         // Check if file was uploaded
-        if (!req.file) {
+        if (!req.file || !req.fileMetadata) {
             res.status(400).json({
                 success: false,
                 error: "No file uploaded. Please select a video file.",
@@ -22,7 +23,8 @@ router.post("/", ensureUser, uploadMiddleware.single("video"), async (req: Reque
             return;
         }
 
-        console.log(req.file);
+        console.log("Uploaded file:", req.file);
+        console.log("File metadata:", req.fileMetadata);
 
         // Validate the uploaded file
         const isValid = await uploadService.validateUploadedFile(req.file.path);
@@ -37,86 +39,107 @@ router.post("/", ensureUser, uploadMiddleware.single("video"), async (req: Reque
             return;
         }
 
-        // Process the uploaded file (but don't create job yet)
-        const processedFile = await uploadService.processUploadFile(req.file, req.session.userId!);
+        // TODO:Extract video metadata (duration, resolution, etc.)
+        let videoMetadata;
+        try {
+            videoMetadata = await VideoMetadataExtractor.extractMetadata(req.file.path);
+        } catch (metadataError) {
+            console.warn("Could not extract video metadata:", metadataError);
+            // Continue with default values if metadata extraction fails
+            videoMetadata = {
+                duration: undefined,
+                resolution: undefined,
+                format: req.fileMetadata.format,
+            };
+        }
+        console.log("videometa data: ", videoMetadata);
+        const userId = req.session.userId;
+        if (!userId) {
+            await uploadService.cancelUpload(req.file.path);
+            res.status(401).json({
+                success: false,
+                error: "User session not found. Please refresh and try again.",
+                code: "NO_USER_SESSION",
+            } as UploadResponse);
+            return;
+        }
 
-        // Parse conversion settings from request body (if provided)
-        // let conversionSettings = null;
-        // if (req.body.conversionSettings) {
-        //     try {
-        //         conversionSettings =
-        //             typeof req.body.conversionSettings === "string" ? req.body.conversionSettings : JSON.stringify(req.body.conversionSettings);
-        //     } catch (error) {
-        //         console.warn("Invalid conversion settings provided:", error);
-        //     }
-        // }
+        // Create video record in database
+        const videoData = {
+            user_id: userId,
+            title: req.body.title || req.fileMetadata.originalName, // Allow custom title
+            file_name: req.fileMetadata.fileName,
+            input_file: req.fileMetadata.inputFile,
+            file_size: req.fileMetadata.size,
+            format: videoMetadata.format || req.fileMetadata.format,
+            duration: videoMetadata.duration,
+            resolution: videoMetadata.resolution,
+            uploaded_at: new Date().toISOString(),
+            is_active: true,
+        };
 
-        // Create job using EnhancedJobService
-        // const job = await EnhancedJobService.createJob({
-        //     user_id: req.session.userId!,
-        //     input_file: processedFile.file.path,
-        //     conversion_settings: conversionSettings,
-        //     file_size: processedFile.file.size,
-        // });
+        const video = await videoService.createVideo(videoData);
 
-        // Get enhanced job information
-        // const enhancedJobInfo = await EnhancedJobService.getEnhancedJobDetails(job.id, req.session.userId!);
+        // Create initial job for the uploaded video
+        const jobType = req.body.jobType || "transcode"; // Default to transcode
+        const conversion_settings = req.body.conversionSettings || "{}";
 
-        // // Get queue statistics
-        // const queueStats = EnhancedJobService.getQueueStats();
+        const jobData = {
+            user_id: userId,
+            video_id: video.id,
+            title: `${jobType} - ${video.title}`,
+            status: "pending" as const,
+            health_status: "waiting" as const,
+            status_description: "Job created and waiting to be queued",
+            job_type: jobType,
+            conversion_settings,
+            tags: req.body.tags, // Can be comma-separated string or JSON array
+            created_at: new Date().toISOString(),
+            duration: videoMetadata.duration,
+            file_name: video.file_name,
+            file_size: video.file_size,
+            resolution: video.resolution,
+            retry_count: 0,
+            priority: parseInt(req.body.priority) || 0,
+        };
 
-        // Return enhanced success response
+        const job = await jobService.create(jobData);
+
+        // Queue the job for processing (if you have a job queue system)
+        try {
+            await jobService.queueJob(job.id);
+        } catch (queueError) {
+            console.warn("Could not queue job immediately:", queueError);
+            // Job is still created in database, can be picked up by workers later
+        }
+
+        // Success response
         const response = {
             success: true,
-            file: {
-                originalName: processedFile.file.originalName,
-                filename: processedFile.file.filename,
-                path: processedFile.file.path,
-                size: processedFile.file.size,
-                mimetype: processedFile.file.mimetype,
-                formattedSize: JobHelper.formatFileSize(processedFile.file.size),
-            },
-            job: {
-                // id: job.id,
-                // status: job.status,
-                // input_file: job.input_file,
-                // created_at: job.created_at,
-                // file_size: job.file_size,
-                // conversion_settings: job.conversion_settings,
-                // // Enhanced job information
-                // statusDescription: JobHelper.getStatusDescription(job.status),
-                // estimatedCompletion: enhancedJobInfo.estimatedCompletion,
-                // progress: enhancedJobInfo.progress,
-                // healthStatus: enhancedJobInfo.healthStatus,
-                // canRetry: enhancedJobInfo.canRetry,
-                // canCancel: enhancedJobInfo.canCancel,
-                // priority: JobHelper.getJobPriority(job),
-                // progressMessage: JobHelper.getProgressMessage(job),
-            },
-            // queue: queueStats,
-            // Additional metadata
-            metadata: {
-                uploadedAt: new Date().toISOString(),
-                userId: req.session.userId!,
-                jobCreated: true,
-                queuedForProcessing: true,
+            message: "File uploaded and job created successfully",
+            data: {
+                video: {
+                    id: video.id,
+                    title: video.title,
+                    fileName: video.file_name,
+                    fileSize: video.file_size,
+                    format: video.format,
+                    duration: video.duration,
+                    resolution: video.resolution,
+                    uploadedAt: video.uploaded_at,
+                },
+                job: {
+                    id: job.id,
+                    title: job.title,
+                    status: job.status,
+                    jobType: job.job_type,
+                    priority: job.priority,
+                    createdAt: job.created_at,
+                },
             },
         };
 
         res.status(201).json(response);
-
-        // Enhanced logging with job details
-        console.log(`File uploaded and job created successfully:`, {
-            originalName: processedFile.file.originalName,
-            jobId: processedFile.jobId,
-            userId: req.session.userId!,
-            fileSize: JobHelper.formatFileSize(processedFile.file.size),
-            // status: job.status,
-            // queuePosition: queueStats.queued + 1,
-        });
-
-        // Optional: Start monitoring if not already running
-        // JobMonitor.startMonitoring();
     } catch (error) {
         console.error("Upload processing error:", error);
 

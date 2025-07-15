@@ -1,593 +1,301 @@
+import { Request, Response } from "express";
+import { jobService } from "../services/jobService";
+import { Job } from "@/Repository/Job";
+import { Router } from "express";
 import { ensureUser } from "@/middlewares/session";
-import { JobModel } from "@/models/Job";
-import { EnhancedJobService, JobFilters, PaginationOptions } from "@/services/jobService";
-import { JobMonitor } from "@/services/jobMonitor";
-import { JobStatusManger } from "@/services/jobStatusManger";
-import { JobHelper } from "@/utils/jobHelper";
-import { JobStatus } from "@/types";
-import { Router, Request, Response } from "express";
+import { db } from "@/database/connection";
+import { FileUtils } from "@/utils/file";
+
+interface JobsQueryParams {
+    page?: string;
+    limit?: string;
+    status?: Job["status"];
+    title?: string;
+    file_name?: string;
+    sort_by?: "created_at" | "updated_at" | "priority" | "status";
+    sort_order?: "asc" | "desc";
+}
+
+interface ProgressStep {
+    step: string;
+    timestamp: string;
+}
+
+interface JobError {
+    message: string;
+    code: string;
+    retriable: boolean;
+}
+
+interface JobActions {
+    canRetry: boolean;
+    canDelete: boolean;
+}
+
+interface FrontendJob {
+    id: string;
+    title: string;
+    status: string;
+    statusDescription: string;
+    healthStatus: string;
+    age: string;
+    createdAt: string;
+    completedAt: string | null;
+    duration: number | null;
+    jobType: string;
+    tags: string[];
+    fileName: string;
+    formattedFileSize: string;
+    resolution: string;
+    previewUrl: string | null;
+    thumbnailUrl: string | null;
+    progressSteps: ProgressStep[];
+    error?: JobError;
+    actions: JobActions;
+}
+
+// Helper function to calculate age from timestamp
+const calculateAge = (timestamp: string): string => {
+    const now = new Date();
+    const created = new Date(timestamp);
+    const diffMs = now.getTime() - created.getTime();
+
+    const minutes = Math.floor(diffMs / (1000 * 60));
+    const hours = Math.floor(minutes / 60);
+    const days = Math.floor(hours / 24);
+
+    if (days > 0) return `${days}d ${hours % 24}h`;
+    if (hours > 0) return `${hours}h ${minutes % 60}m`;
+    if (minutes > 0) return `${minutes}m`;
+    return "Just now";
+};
+
+// Helper function to generate progress steps
+const generateProgressSteps = (job: any): ProgressStep[] => {
+    const steps: ProgressStep[] = [];
+
+    if (job.created_at) {
+        steps.push({ step: "queued", timestamp: job.created_at });
+    }
+
+    if (job.started_at) {
+        steps.push({ step: "processing", timestamp: job.started_at });
+    }
+
+    if (job.completed_at) {
+        const finalStatus = job.status === "failed" ? "failed" : "completed";
+        steps.push({ step: finalStatus, timestamp: job.completed_at });
+    }
+
+    return steps;
+};
+
+// Helper function to determine job actions
+const getJobActions = (job: any): JobActions => {
+    const canRetry = job.status === "failed" && job.error_retriable === true;
+    const canDelete = ["completed", "failed", "queued"].includes(job.status);
+
+    return { canRetry, canDelete };
+};
 
 const router = Router();
 
-// GET /api/jobs - Get user's jobs with enhanced filtering, pagination and statistics
 router.get("/", ensureUser, async (req: Request, res: Response) => {
     try {
-        // Parse pagination parameters
-        const page = parseInt(req.query.page as string) || 1;
-        const limit = Math.min(parseInt(req.query.limit as string) || 10, 50);
-        const pagination: PaginationOptions = { page, limit };
+        const userId = req.session.userId;
+        const { page = "1", limit = "20", status, title, file_name, sort_by = "created_at", sort_order = "desc" } = req.query as JobsQueryParams;
 
-        // Parse filter parameters
-        const filters: JobFilters = {};
+        // Validate pagination parameters
+        const pageNum = Math.max(1, parseInt(page, 10) || 1);
+        const limitNum = Math.min(100, Math.max(1, parseInt(limit, 10) || 20));
+        const offset = (pageNum - 1) * limitNum;
 
-        if (req.query.status && Object.values(JobStatus).includes(req.query.status as JobStatus)) {
-            filters.status = req.query.status as JobStatus;
+        // Build WHERE clauses for filtering
+        const whereConditions: string[] = ["j.user_id = ?"];
+        const queryParams: any[] = [userId];
+
+        // Status filter
+        if (status && ["pending", "queued", "processing", "completed", "failed", "cancelled"].includes(status)) {
+            whereConditions.push("j.status = ?");
+            queryParams.push(status);
         }
 
-        if (req.query.startDate) {
-            filters.startDate = req.query.startDate as string;
+        // Title filter
+        if (title) {
+            whereConditions.push("j.title LIKE ?");
+            queryParams.push(`%${title}%`);
         }
 
-        if (req.query.endDate) {
-            filters.endDate = req.query.endDate as string;
+        // File name filter
+        if (file_name) {
+            whereConditions.push("j.file_name LIKE ?");
+            queryParams.push(`%${file_name}%`);
         }
 
-        if (req.query.search) {
-            filters.search = req.query.search as string;
+        // Build ORDER BY clause
+        const validSortColumns = ["created_at", "updated_at", "priority", "status"];
+        const sortColumn = validSortColumns.includes(sort_by) ? sort_by : "created_at";
+        const sortDirection = sort_order === "asc" ? "ASC" : "DESC";
+
+        // Construct the main query
+        const whereClause = whereConditions.length > 0 ? `WHERE ${whereConditions.join(" AND ")}` : "";
+        const orderClause = `ORDER BY ${sortColumn} ${sortDirection}`;
+        const limitClause = `LIMIT ${limitNum} OFFSET ${offset}`;
+
+        const mainQuery = `
+            SELECT 
+                j.*,
+                v.title as video_title,
+                v.file_name as video_file_name,
+                v.resolution as video_resolution
+            FROM jobs j
+            LEFT JOIN videos v ON j.video_id = v.id
+            ${whereClause}
+            ${orderClause}
+            ${limitClause}
+        `;
+
+        // Count query for pagination
+        const countQuery = `
+            SELECT COUNT(*) as total
+            FROM jobs j
+            ${whereClause}
+        `;
+
+        // Execute queries
+        const [jobs, countResult] = await Promise.all([db.all(mainQuery, queryParams), db.get(countQuery, queryParams)]);
+
+        const total = countResult?.total || 0;
+        const totalPages = Math.ceil(total / limitNum);
+        const hasNextPage = pageNum < totalPages;
+        const hasPrevPage = pageNum > 1;
+
+        // Transform jobs data to match frontend format
+        const transformedJobs: FrontendJob[] = jobs.map((job: any) => {
+            // Parse tags
+            let tags: string[] = [];
+            if (job.tags) {
+                try {
+                    tags = job.tags.startsWith("[") ? JSON.parse(job.tags) : job.tags.split(",").map((t: string) => t.trim());
+                } catch {
+                    tags = job.tags.split(",").map((t: string) => t.trim());
+                }
+            }
+
+            // Parse conversion settings
+            let conversionSettings = null;
+            if (job.conversion_settings) {
+                try {
+                    conversionSettings = JSON.parse(job.conversion_settings);
+                } catch {
+                    conversionSettings = job.conversion_settings;
+                }
+            }
+
+            // Build error object if job failed
+            let error: JobError | undefined;
+            if (job.status === "failed" && job.error_message) {
+                error = {
+                    message: job.error_message,
+                    code: job.error_code || "UNKNOWN_ERROR",
+                    retriable: job.error_retriable === true,
+                };
+            }
+
+            return {
+                id: job.id.toString(),
+                title: job.title || job.video_title || "Untitled Job",
+                status: job.status,
+                statusDescription: job.status_description || getDefaultStatusDescription(job.status),
+                healthStatus: job.health_status || getDefaultHealthStatus(job.status),
+                age: calculateAge(job.created_at),
+                createdAt: job.created_at,
+                completedAt: job.completed_at || null,
+                duration: job.duration || null,
+                jobType: job.job_type || "unknown",
+                tags,
+                fileName: job.file_name || job.video_file_name || "unknown.mp4",
+                formattedFileSize: FileUtils.formatFileSize(job.file_size || 0),
+                resolution: job.resolution || job.video_resolution || "Unknown",
+                previewUrl: job.preview_url || null,
+                thumbnailUrl: job.thumbnail_url || null,
+                progressSteps: generateProgressSteps(job),
+                ...(error && { error }),
+                actions: getJobActions(job),
+            };
+        });
+
+        // Helper function for default status descriptions
+        function getDefaultStatusDescription(status: string): string {
+            const descriptions = {
+                pending: "Job is pending",
+                queued: "Waiting in queue",
+                processing: "Job is being processed",
+                completed: "Job completed successfully",
+                failed: "Job failed to complete",
+                cancelled: "Job was cancelled",
+            };
+            return descriptions[status as keyof typeof descriptions] || "Unknown status";
         }
 
-        // Get enhanced job list with statistics
-        const result = await EnhancedJobService.getUserJobs(req.session.userId!, filters, pagination);
+        // Helper function for default health status
+        function getDefaultHealthStatus(status: string): string {
+            const healthMap = {
+                pending: "waiting",
+                queued: "waiting",
+                processing: "in-progress",
+                completed: "healthy",
+                failed: "unhealthy",
+                cancelled: "unhealthy",
+            };
+            return healthMap[status as keyof typeof healthMap] || "unknown";
+        }
 
-        // Add monitoring information
-        const queueStats = EnhancedJobService.getQueueStats();
-
+        // Response with pagination metadata
         res.json({
-            success: true,
-            jobs: result.jobs.map((job) => ({
-                ...JobHelper.sanitizeJobForAPI(job),
-                age: JobHelper.getJobAge(job.created_at),
-                statusDescription: JobHelper.getStatusDescription(job.status),
-                healthStatus: JobHelper.determineHealthStatus(job),
-                formattedFileSize: JobHelper.formatFileSize(job.file_size || 0),
-            })),
-            pagination: result.pagination,
-            statistics: result.statistics,
-            queue: queueStats,
-            filters: filters,
+            data: transformedJobs,
+            pagination: {
+                page: pageNum,
+                limit: limitNum,
+                total,
+                totalPages,
+                hasNextPage,
+                hasPrevPage,
+            },
+            filters: {
+                status,
+                title,
+                file_name,
+            },
+            sorting: {
+                sort_by: sortColumn,
+                sort_order: sortDirection.toLowerCase(),
+            },
         });
     } catch (error) {
-        console.error("Error fetching user jobs:", error);
+        console.error("Error fetching jobs:", error);
         res.status(500).json({
             success: false,
-            error: "Failed to fetch jobs",
-            code: "FETCH_ERROR",
+            error: "Internal server error",
+            message: "Failed to fetch jobs",
         });
     }
 });
 
-// GET /api/jobs/stats - Enhanced user statistics with health monitoring
+// Additional helper endpoint for job statistics
 router.get("/stats", ensureUser, async (req: Request, res: Response) => {
     try {
-        // Get enhanced service statistics
-        const serviceStats = await EnhancedJobService.getServiceStatistics(req.session.userId!);
-
-        // Get monitoring statistics
-        const monitoringStats = await JobMonitor.getMonitoringStats();
-
-        // Get recent jobs with enhanced info
-        const recentJobs = await EnhancedJobService.getUserJobs(req.session.userId!, {}, { page: 1, limit: 5 });
-
-        // Get jobs with status details
-        const jobsWithDetails = await JobStatusManger.getJobsWithStatusDetails(req.session.userId!);
+        const userId = req.session.userId!;
+        const stats = await jobService.getUserJobStats(userId);
 
         res.json({
-            success: true,
-            stats: {
-                ...serviceStats,
-                monitoring: {
-                    totalJobs: monitoringStats.totalJobs,
-                    healthyJobs: monitoringStats.healtyJobs,
-                    unhealthyJobs: monitoringStats.unhealtyJobs,
-                    stuckJobs: monitoringStats.stuckJobs,
-                    orphanedFiles: monitoringStats.orphanedFiles,
-                    lastMonitorRun: monitoringStats.lastMonitorRun,
-                },
-            },
-            recentJobs: recentJobs.jobs.map((job) => ({
-                ...JobHelper.sanitizeJobForAPI(job),
-                age: JobHelper.getJobAge(job.created_at),
-                statusDescription: JobHelper.getStatusDescription(job.status),
-                healthStatus: JobHelper.determineHealthStatus(job),
-                formattedFileSize: JobHelper.formatFileSize(job.file_size || 0),
-            })),
-            jobsWithDetails: jobsWithDetails.slice(0, 10), // Latest 10 with full details
+            data: stats,
         });
     } catch (error) {
-        console.error("Error fetching enhanced job statistics:", error);
+        console.error("Error fetching job stats:", error);
         res.status(500).json({
-            success: false,
-            error: "Failed to fetch job statistics",
-            code: "STATS_ERROR",
-        });
-    }
-});
-
-// GET /api/jobs/queue/status - Enhanced queue status with monitoring
-router.get("/queue/status", ensureUser, async (req: Request, res: Response) => {
-    try {
-        const queueStats = EnhancedJobService.getQueueStats();
-        const nextJob = EnhancedJobService.getNextJobInQueue();
-        const monitoringStatus = JobMonitor.getMonitoringStatus();
-
-        res.json({
-            success: true,
-            queue: {
-                ...queueStats,
-                nextJobId: nextJob,
-            },
-            monitoring: monitoringStatus,
-        });
-    } catch (error) {
-        console.error("Error fetching enhanced queue status:", error);
-        res.status(500).json({
-            success: false,
-            error: "Failed to fetch queue status",
-            code: "QUEUE_ERROR",
-        });
-    }
-});
-
-// NEW ENDPOINTS FOR ENHANCED MONITORING
-
-// GET /api/jobs/health/check - Run health check on user's jobs
-router.get("/health/check", ensureUser, async (req: Request, res: Response) => {
-    try {
-        const healthChecks = await JobMonitor.runHealthCheck();
-
-        // Filter for user's jobs only
-        const userJobs = await JobModel.findByUserId(req.session.userId!);
-        const userJobIds = userJobs.map((job) => job.id);
-        const userHealthChecks = healthChecks.filter((check) => userJobIds.includes(check.jobId));
-
-        res.json({
-            success: true,
-            healthChecks: userHealthChecks,
-            summary: {
-                total: userHealthChecks.length,
-                healthy: userHealthChecks.filter((check) => check.isHealty).length,
-                unhealthy: userHealthChecks.filter((check) => !check.isHealty).length,
-            },
-        });
-    } catch (error) {
-        console.error("Error running health check:", error);
-        res.status(500).json({
-            success: false,
-            error: "Failed to run health check",
-            code: "HEALTH_CHECK_ERROR",
-        });
-    }
-});
-
-// POST /api/jobs/cleanup/old - Cleanup old jobs (admin-like feature for users)
-router.post("/cleanup/old", ensureUser, async (req: Request, res: Response) => {
-    try {
-        const daysOld = parseInt(req.body.daysOld) || 30;
-        const uploadDirectory = req.body.uploadDirectory;
-
-        const cleanupResult = await EnhancedJobService.cleanupOldJobs(daysOld, uploadDirectory);
-
-        res.json({
-            success: true,
-            message: "Cleanup completed successfully",
-            result: cleanupResult,
-        });
-    } catch (error) {
-        console.error("Error during cleanup:", error);
-        res.status(500).json({
-            success: false,
-            error: "Failed to cleanup old jobs",
-            code: "CLEANUP_ERROR",
-        });
-    }
-});
-
-// GET /api/jobs/health/service - Get overall service health
-router.get("/health/service", ensureUser, async (req: Request, res: Response) => {
-    try {
-        const healthCheck = await EnhancedJobService.performHealthCheck();
-
-        res.json({
-            success: true,
-            health: healthCheck,
-        });
-    } catch (error) {
-        console.error("Error checking service health:", error);
-        res.status(500).json({
-            success: false,
-            error: "Failed to check service health",
-            code: "SERVICE_HEALTH_ERROR",
-        });
-    }
-});
-
-// POST /api/jobs/monitoring/start - Start monitoring (if not already running)
-router.post("/monitoring/start", ensureUser, async (req: Request, res: Response) => {
-    try {
-        JobMonitor.startMonitoring();
-        const status = JobMonitor.getMonitoringStatus();
-
-        res.json({
-            success: true,
-            message: "Job monitoring started",
-            status,
-        });
-    } catch (error) {
-        console.error("Error starting monitoring:", error);
-        res.status(500).json({
-            success: false,
-            error: "Failed to start monitoring",
-            code: "MONITORING_START_ERROR",
-        });
-    }
-});
-
-// POST /api/jobs/monitoring/stop - Stop monitoring
-router.post("/monitoring/stop", ensureUser, async (req: Request, res: Response) => {
-    try {
-        JobMonitor.stopMonitoring();
-        const status = JobMonitor.getMonitoringStatus();
-
-        res.json({
-            success: true,
-            message: "Job monitoring stopped",
-            status,
-        });
-    } catch (error) {
-        console.error("Error stopping monitoring:", error);
-        res.status(500).json({
-            success: false,
-            error: "Failed to stop monitoring",
-            code: "MONITORING_STOP_ERROR",
-        });
-    }
-});
-
-// GET /api/jobs/:id - Get enhanced job details with status history and health info
-router.get("/:id", ensureUser, async (req: Request, res: Response) => {
-    try {
-        const jobId = parseInt(req.params.id);
-        if (isNaN(jobId)) {
-            res.status(400).json({
-                success: false,
-                error: "Invalid job ID",
-                code: "INVALID_JOB_ID",
-            });
-            return;
-        }
-
-        // Get enhanced job details with all monitoring info
-        const enhancedJob = await EnhancedJobService.getEnhancedJobDetails(jobId, req.session.userId!);
-
-        // Get additional health check info
-        const job = await JobModel.findById(jobId);
-        if (!job) {
-            res.status(404).json({
-                success: false,
-                error: "Job not found",
-                code: "JOB_NOT_FOUND",
-            });
-            return;
-        }
-
-        // Check ownership
-        if (job.user_id !== req.session.userId) {
-            res.status(403).json({
-                success: false,
-                error: "Access denied",
-                code: "ACCESS_DENIED",
-            });
-            return;
-        }
-
-        // Get job health check
-        const healthCheck = await JobMonitor.checkJobHealth(job);
-
-        // Get retry/cancel capabilities
-        const retryInfo = JobHelper.canRetryJob(job);
-        const cancelInfo = JobHelper.canCancelJob(job);
-
-        res.json({
-            success: true,
-            job: {
-                ...enhancedJob.job,
-                // Enhanced information
-                statusHistory: enhancedJob.statusHistory,
-                estimatedCompletion: enhancedJob.estimatedCompletion,
-                progress: enhancedJob.progress,
-                progressMessage: JobHelper.getProgressMessage(job),
-                healthStatus: enhancedJob.healthStatus,
-                canRetry: enhancedJob.canRetry,
-                canCancel: enhancedJob.canCancel,
-                metrics: enhancedJob.metrics,
-                // Health check info
-                healthCheck: {
-                    isHealthy: healthCheck.isHealty,
-                    issues: healthCheck.issues,
-                    lastChecked: healthCheck.lastChecked,
-                },
-                // Additional helper info
-                age: JobHelper.getJobAge(job.created_at),
-                statusDescription: JobHelper.getStatusDescription(job.status),
-                priority: JobHelper.getJobPriority(job),
-            },
-            queue: EnhancedJobService.getQueueStats(),
-        });
-    } catch (error) {
-        console.error("Error fetching enhanced job details:", error);
-        res.status(500).json({
-            success: false,
-            error: "Failed to fetch job details",
-            code: "FETCH_ERROR",
-        });
-    }
-});
-
-// DELETE /api/jobs/:id - Delete job with enhanced cleanup
-router.delete("/:id", ensureUser, async (req: Request, res: Response) => {
-    try {
-        const jobId = parseInt(req.params.id);
-
-        if (isNaN(jobId)) {
-            res.status(400).json({
-                success: false,
-                error: "Invalid job ID",
-                code: "INVALID_JOB_ID",
-            });
-            return;
-        }
-
-        await EnhancedJobService.deleteJob(jobId, req.session.userId!);
-
-        res.json({
-            success: true,
-            message: "Job deleted successfully",
-            queue: EnhancedJobService.getQueueStats(),
-        });
-    } catch (error) {
-        console.error("Error deleting job:", error);
-
-        if (error instanceof Error) {
-            if (error.message === "Job not found") {
-                res.status(404).json({
-                    success: false,
-                    error: "Job not found",
-                    code: "JOB_NOT_FOUND",
-                });
-                return;
-            }
-
-            if (error.message === "Access denied") {
-                res.status(403).json({
-                    success: false,
-                    error: "Access denied",
-                    code: "ACCESS_DENIED",
-                });
-                return;
-            }
-        }
-
-        res.status(500).json({
-            success: false,
-            error: "Failed to delete job",
-            code: "DELETE_ERROR",
-        });
-    }
-});
-
-// POST /api/jobs/:id/retry - Retry failed job with enhanced validation
-router.post("/:id/retry", ensureUser, async (req: Request, res: Response) => {
-    try {
-        const jobId = parseInt(req.params.id);
-
-        if (isNaN(jobId)) {
-            res.status(400).json({
-                success: false,
-                error: "Invalid job ID",
-                code: "INVALID_JOB_ID",
-            });
-            return;
-        }
-
-        // Check if job can be retried using helper
-        const job = await JobModel.findById(jobId);
-        if (!job) {
-            res.status(404).json({
-                success: false,
-                error: "Job not found",
-                code: "JOB_NOT_FOUND",
-            });
-            return;
-        }
-
-        const retryCheck = JobHelper.canRetryJob(job);
-        if (!retryCheck.canRetry) {
-            res.status(400).json({
-                success: false,
-                error: retryCheck.reason || "Job cannot be retried",
-                code: "CANNOT_RETRY",
-            });
-            return;
-        }
-
-        const retriedJob = await EnhancedJobService.retryJob(jobId, req.session.userId!);
-
-        res.json({
-            success: true,
-            message: "Job queued for retry",
-            job: {
-                ...JobHelper.sanitizeJobForAPI(retriedJob),
-                statusDescription: JobHelper.getStatusDescription(retriedJob.status),
-                age: JobHelper.getJobAge(retriedJob.created_at),
-            },
-            queue: EnhancedJobService.getQueueStats(),
-        });
-    } catch (error) {
-        console.error("Error retrying job:", error);
-
-        if (error instanceof Error) {
-            if (error.message === "Job not found") {
-                res.status(404).json({
-                    success: false,
-                    error: "Job not found",
-                    code: "JOB_NOT_FOUND",
-                });
-                return;
-            }
-
-            if (error.message === "Access denied") {
-                res.status(403).json({
-                    success: false,
-                    error: "Access denied",
-                    code: "ACCESS_DENIED",
-                });
-                return;
-            }
-        }
-
-        res.status(500).json({
-            success: false,
-            error: "Failed to retry job",
-            code: "RETRY_ERROR",
-        });
-    }
-});
-
-// POST /api/jobs/:id/cancel - Cancel job with enhanced validation
-router.post("/:id/cancel", ensureUser, async (req: Request, res: Response) => {
-    try {
-        const jobId = parseInt(req.params.id);
-
-        if (isNaN(jobId)) {
-            res.status(400).json({
-                success: false,
-                error: "Invalid job ID",
-                code: "INVALID_JOB_ID",
-            });
-            return;
-        }
-
-        // Check if job can be cancelled using helper
-        const job = await JobModel.findById(jobId);
-        if (!job) {
-            res.status(404).json({
-                success: false,
-                error: "Job not found",
-                code: "JOB_NOT_FOUND",
-            });
-            return;
-        }
-
-        const cancelCheck = JobHelper.canCancelJob(job);
-        if (!cancelCheck.canCancel) {
-            res.status(400).json({
-                success: false,
-                error: cancelCheck.reason || "Job cannot be cancelled",
-                code: "CANNOT_CANCEL",
-            });
-            return;
-        }
-
-        await EnhancedJobService.cancelJob(jobId, req.session.userId!);
-
-        res.json({
-            success: true,
-            message: "Job cancelled successfully",
-            queue: EnhancedJobService.getQueueStats(),
-        });
-    } catch (error) {
-        console.error("Error cancelling job:", error);
-
-        if (error instanceof Error) {
-            if (error.message === "Job not found") {
-                res.status(404).json({
-                    success: false,
-                    error: "Job not found",
-                    code: "JOB_NOT_FOUND",
-                });
-                return;
-            }
-
-            if (error.message === "Access denied") {
-                res.status(403).json({
-                    success: false,
-                    error: "Access denied",
-                    code: "ACCESS_DENIED",
-                });
-                return;
-            }
-        }
-
-        res.status(500).json({
-            success: false,
-            error: "Failed to cancel job",
-            code: "CANCEL_ERROR",
-        });
-    }
-});
-
-// GET /api/jobs/:id/status/history - Get job status history
-router.get("/:id/status/history", ensureUser, async (req: Request, res: Response) => {
-    try {
-        const jobId = parseInt(req.params.id);
-        if (isNaN(jobId)) {
-            res.status(400).json({
-                success: false,
-                error: "Invalid job ID",
-                code: "INVALID_JOB_ID",
-            });
-            return;
-        }
-
-        // Verify job ownership
-        const job = await JobModel.findById(jobId);
-        if (!job) {
-            res.status(404).json({
-                success: false,
-                error: "Job not found",
-                code: "JOB_NOT_FOUND",
-            });
-            return;
-        }
-
-        if (job.user_id !== req.session.userId) {
-            res.status(403).json({
-                success: false,
-                error: "Access denied",
-                code: "ACCESS_DENIED",
-            });
-            return;
-        }
-
-        const statusHistory = JobStatusManger.getJobStatusHistory(jobId);
-        const estimatedCompletion = JobStatusManger.calculateEstimationTime(job);
-        const progress = JobStatusManger.getJobProgress(job);
-
-        res.json({
-            success: true,
-            jobId,
-            statusHistory,
-            estimatedCompletion,
-            progress,
-            currentStatus: job.status,
-            statusDescription: JobHelper.getStatusDescription(job.status),
-        });
-    } catch (error) {
-        console.error("Error fetching job status history:", error);
-        res.status(500).json({
-            success: false,
-            error: "Failed to fetch status history",
-            code: "STATUS_HISTORY_ERROR",
+            error: "Internal server error",
+            message: "Failed to fetch job statistics",
         });
     }
 });

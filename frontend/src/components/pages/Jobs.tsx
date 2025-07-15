@@ -7,7 +7,7 @@ import type { Job } from "@/types";
 
 // Main component
 const JobsPage = () => {
-    const [selectedJobs, setSelectedJobs] = useState(new Set());
+    const [selectedJobs, setSelectedJobs] = useState<Set<string>>(new Set());
     const [searchQuery, setSearchQuery] = useState("");
     const [statusFilter, setStatusFilter] = useState("all");
     const [hoveredJob, setHoveredJob] = useState<Job | null>(null);

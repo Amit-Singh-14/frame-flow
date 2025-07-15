@@ -8,6 +8,7 @@ import { detailedRequestLogger } from "./middlewares/requestLogger";
 import userRoutes from "@/routes/user";
 import uploadRoutes from "@/routes/upload";
 import jobsRoutes from "@/routes/job";
+import dashboardRoutes from "@/routes/dashboard";
 
 const app = express();
 
@@ -54,6 +55,7 @@ app.get("/health", (req, res) => {
 // API routes
 app.use("/api/users", userRoutes);
 app.use("/api/upload", uploadRoutes);
+app.use("/api/dashboard", dashboardRoutes);
 app.use("/api/jobs", jobsRoutes);
 
 // Global error handler
@@ -80,6 +82,7 @@ app.use((err: any, req: express.Request, res: express.Response, next: express.Ne
         requestId: req.requestId,
     });
 });
+
 // FIXME:   throw new TypeError(`Missing parameter name at ${i}: ${DEBUG_URL}`);
 
 // app.all("*", (req, res) => {

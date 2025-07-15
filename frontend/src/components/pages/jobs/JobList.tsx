@@ -132,11 +132,12 @@ interface JobListProps {
         }>
     >;
     setSelectedJobDetails: React.Dispatch<React.SetStateAction<Job | null>>;
-    setSelectedJobs: React.Dispatch<React.SetStateAction<Set<unknown>>>;
-    selectedJobs: Set<unknown>;
+    setSelectedJobs: React.Dispatch<React.SetStateAction<Set<string>>>;
+    selectedJobs: Set<string>;
     searchQuery: string;
     statusFilter: string;
 }
+
 function JobList({ searchQuery, setSelectedJobs, selectedJobs, setHoveredJob, setMousePosition, setSelectedJobDetails, statusFilter }: JobListProps) {
     // Filter jobs based on search and status
     const filteredJobs = useMemo(() => {
@@ -182,6 +183,7 @@ function JobList({ searchQuery, setSelectedJobs, selectedJobs, setHoveredJob, se
             setSelectedJobs(new Set(filteredJobs.map((job) => job.id)));
         }
     };
+
     return (
         <div className="bg-gray-900/30 backdrop-blur-sm border border-gray-800/50 rounded-xl overflow-hidden">
             <div className="overflow-x-auto">

@@ -4,6 +4,22 @@ export interface User {
     created_at: string;
 }
 
+export interface JobResponse {
+    id: number;
+    title: string;
+    fileName: string;
+    status: JobStatus;
+    error?: string;
+    jobType: JobType;
+    formattedFileSize: string;
+    resolution: string;
+    age: string;
+}
+
+export const BASIC_JOB_TYPES = ["transcode", "compress", "resize", "change-framerate", "convert-container"] as const;
+
+export type JobType = (typeof BASIC_JOB_TYPES)[number];
+
 export interface Job {
     id: number;
     user_id: number;

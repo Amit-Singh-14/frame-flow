@@ -88,7 +88,7 @@ const Dashboard: React.FC = () => {
     const stats = dashboardData?.stats;
 
     return (
-        <div className="min-h-screen bg-black p-6">
+        <div className="min-h-screen bg-gradient-to-br from-gray-950 via-gray-900 to-gray-950 text-white">
             <div className="max-w-7xl mx-auto space-y-8">
                 {/* Header Section */}
                 <DashHeader />
