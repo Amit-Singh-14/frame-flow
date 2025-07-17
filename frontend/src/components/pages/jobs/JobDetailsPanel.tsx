@@ -4,7 +4,7 @@ import { AlertCircle, Calendar, Download, Eye, FileText, RotateCcw, Trash2, X, Z
 import { StatusBadge } from "./StatusBadge";
 import { InfoSection } from "./InfoSection";
 import { ActionButton } from "./ActionButton";
-import type { Job } from "@/types";
+import type { Job } from "@/types/jobs";
 
 type JobDetailsPanelProps = {
     job: Job | null;

@@ -68,13 +68,13 @@ const Dashboard: React.FC = () => {
         isLoading,
         error,
     } = useQuery<DashboardData>({
-        queryKey: queryKeys.usersStats(sessionId || ""),
+        queryKey: queryKeys.dashboard(sessionId || ""),
         queryFn: async () => {
-            const response = await api.get(API_ENDPOINTS.stats);
+            const response = await api.get(API_ENDPOINTS.dashboard);
             return response.data;
         },
         enabled: !!sessionId,
-        refetchInterval: 100000, // Refetch every 100 seconds
+        refetchInterval: 10000000, // Refetch every 100 seconds
     });
 
     if (isLoading) {
