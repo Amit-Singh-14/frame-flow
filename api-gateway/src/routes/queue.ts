@@ -16,6 +16,7 @@ router.get("/next", async (req, res) => {
             res.status(204).json({ message: "No jobs in queue" });
             return;
         }
+        console.log("queue", jobId);
 
         // Get full job details from database
         const job = await jobService.getById(jobId);

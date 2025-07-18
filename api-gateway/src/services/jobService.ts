@@ -109,6 +109,7 @@ export class JobService {
      * Fail a job
      */
     async failJob(jobId: number, errorMessage: string, errorCode?: string, errorRetriable: boolean = false): Promise<void> {
+        console.log(errorRetriable);
         try {
             await JobRepository.updateStatus(jobId, "failed", {
                 errorMessage,

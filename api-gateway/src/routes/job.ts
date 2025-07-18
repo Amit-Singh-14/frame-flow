@@ -92,7 +92,7 @@ const generateProgressSteps = (job: any): ProgressStep[] => {
 
 // Helper function to determine job actions
 const getJobActions = (job: any): JobActions => {
-    const canRetry = job.status === "failed" && job.error_retriable === true;
+    const canRetry = job.status === "failed" && !!job.error_retriable === true;
     const canDelete = ["completed", "failed", "queued"].includes(job.status);
 
     return { canRetry, canDelete };
@@ -191,14 +191,14 @@ router.get("/", ensureUser, async (req: Request, res: Response) => {
                     conversionSettings = job.conversion_settings;
                 }
             }
-
+            console.log(job);
             // Build error object if job failed
             let error: JobError | undefined;
             if (job.status === "failed" && job.error_message) {
                 error = {
                     message: job.error_message,
                     code: job.error_code || "UNKNOWN_ERROR",
-                    retriable: job.error_retriable === true,
+                    retriable: !!job.error_retriable === true,
                 };
             }
 

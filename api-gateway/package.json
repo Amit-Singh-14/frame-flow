@@ -9,6 +9,7 @@
     "dev:watch": "concurrently \"tsc -w\" \"nodemon dist/app.js\"",
     "clean": "rm -rf dist",
     "test:db": "ts-node -r tsconfig-paths/register src/test-db.ts",
+    "test": "ts-node -r tsconfig-paths/register",
     "redis:start": "docker start redis || docker run -d --name redis -p 6379:6379 redis:latest",
     "redis:stop": "docker stop redis",
     "redis:logs": "docker logs -f redis"

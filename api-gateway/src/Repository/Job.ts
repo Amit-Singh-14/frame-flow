@@ -148,6 +148,7 @@ export class JobRepository {
         }
     ): Promise<void> {
         try {
+            console.log(options?.errorRetriable);
             const now = new Date().toISOString();
             const completedAt = status === "completed" ? now : null;
             const startedAt = status === "processing" ? now : undefined;
