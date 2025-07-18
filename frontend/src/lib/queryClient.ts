@@ -37,6 +37,9 @@ export const queryKeys = {
     jobs: (userId: string, filters?: Record<string, any>) => ["jobs", userId, filters] as const,
     job: (jobId: string) => ["job", jobId] as const,
 
+    // dashboard keys
+    dashboard: (userId: string) => [userId, "dashboard"] as const,
+
     // monitoring keys
     // TODO: add all the key for job and monitoring
 } as const;

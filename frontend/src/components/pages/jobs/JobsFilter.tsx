@@ -1,65 +1,68 @@
-import { Filter, RefreshCw, Search, Trash2 } from "lucide-react";
+import React from "react";
+import { Search, Filter, Trash2, Download } from "lucide-react";
+import { useJobStore } from "@/store/jobStore";
 
-interface JobsFilterProps {
-    searchQuery: string;
-    setSearchQuery: (value: string) => void;
-    statusFilter: string;
-    setStatusFilter: (value: string) => void;
-    selectedJobs: Set<unknown>;
-}
+const JobsFilter: React.FC = () => {
+    const { searchQuery, statusFilter, selectedJobs, setSearchQuery, setStatusFilter, clearSelection } = useJobStore();
 
-function JobsFilter({ searchQuery, setSearchQuery, setStatusFilter, statusFilter, selectedJobs }: JobsFilterProps) {
     return (
-        <div className="bg-gray-900/30 backdrop-blur-sm border border-gray-800/50 rounded-xl p-6 mb-8">
-            <div className="flex flex-col lg:flex-row gap-4 items-start lg:items-center justify-between">
-                <div className="flex flex-col sm:flex-row gap-4 flex-1">
-                    {/* Search */}
-                    <div className="relative flex-1 max-w-md">
-                        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-                        <input
-                            type="text"
-                            placeholder="Search jobs by name or filename..."
-                            value={searchQuery}
-                            onChange={(e) => setSearchQuery(e.target.value)}
-                            className="w-full pl-10 pr-4 py-2.5 bg-gray-800/50 border border-gray-700/50 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-transparent text-white placeholder-gray-400"
-                        />
-                    </div>
-
-                    {/* Status Filter */}
-                    <div className="relative">
-                        <select
-                            value={statusFilter}
-                            onChange={(e) => setStatusFilter(e.target.value)}
-                            className="appearance-none bg-gray-800/50 border border-gray-700/50 rounded-lg px-4 py-2.5 pr-10 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-transparent"
-                        >
-                            <option value="all">All Status</option>
-                            <option value="completed">Completed</option>
-                            <option value="processing">Processing</option>
-                            <option value="failed">Failed</option>
-                            <option value="queued">Queued</option>
-                        </select>
-                        <Filter className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4 pointer-events-none" />
-                    </div>
+        <div className="mb-6 space-y-4">
+            <div className="flex flex-col sm:flex-row gap-4">
+                {/* Search */}
+                <div className="relative flex-1">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                    <input
+                        type="text"
+                        placeholder="Search jobs..."
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        className="w-full pl-10 pr-4 py-2 bg-gray-800/30 border border-gray-700/50 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                    />
                 </div>
 
-                {/* Actions */}
-                <div className="flex gap-2">
-                    {selectedJobs.size > 0 && (
-                        <div className="flex items-center gap-2 px-3 py-2 bg-gray-800/50 rounded-lg text-sm">
-                            <span className="text-gray-400">{selectedJobs.size} selected</span>
-                            <button className="text-red-400 hover:text-red-300 transition-colors">
-                                <Trash2 className="w-4 h-4" />
-                            </button>
-                        </div>
-                    )}
-                    <button className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors text-sm font-medium">
-                        <RefreshCw className="w-4 h-4" />
-                        Refresh
-                    </button>
+                {/* Status Filter */}
+                <div className="relative">
+                    <Filter className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                    <select
+                        value={statusFilter}
+                        onChange={(e) => setStatusFilter(e.target.value)}
+                        className="pl-10 pr-8 py-2 bg-gray-800/30 border border-gray-700/50 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                    >
+                        <option value="all">All Status</option>
+                        <option value="pending">Pending</option>
+                        <option value="processing">Processing</option>
+                        <option value="completed">Completed</option>
+                        <option value="failed">Failed</option>
+                    </select>
                 </div>
             </div>
+
+            {/* Bulk Actions */}
+            {selectedJobs.size > 0 && (
+                <div className="flex items-center gap-4 p-4 bg-blue-500/10 border border-blue-500/20 rounded-lg">
+                    <span className="text-sm text-blue-400">
+                        {selectedJobs.size} job{selectedJobs.size > 1 ? "s" : ""} selected
+                    </span>
+                    <div className="flex gap-2">
+                        <button className="flex items-center gap-2 px-3 py-1.5 bg-red-500/20 hover:bg-red-500/30 text-red-400 rounded-lg transition-colors">
+                            <Trash2 className="w-4 h-4" />
+                            Delete
+                        </button>
+                        <button className="flex items-center gap-2 px-3 py-1.5 bg-green-500/20 hover:bg-green-500/30 text-green-400 rounded-lg transition-colors">
+                            <Download className="w-4 h-4" />
+                            Export
+                        </button>
+                        <button
+                            onClick={clearSelection}
+                            className="px-3 py-1.5 bg-gray-500/20 hover:bg-gray-500/30 text-gray-400 rounded-lg transition-colors"
+                        >
+                            Clear
+                        </button>
+                    </div>
+                </div>
+            )}
         </div>
     );
-}
+};
 
 export default JobsFilter;

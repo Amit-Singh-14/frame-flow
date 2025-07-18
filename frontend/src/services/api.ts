@@ -58,6 +58,7 @@ export const API_ENDPOINTS = {
     jobDetail: (jobId: string) => `/api/jobs/${jobId}`,
     stats: "/api/jobs/stats",
 
+    dashboard: "/api/dashboard",
     // monitoring endpoints
     // TODO: add rest job endpoint and monitoring enedpoints
 };
