@@ -253,7 +253,7 @@ router.get("/", ensureUser, async (req: Request, res: Response) => {
 
         // Response with pagination metadata
         res.json({
-            data: transformedJobs,
+            jobs: transformedJobs,
             pagination: {
                 page: pageNum,
                 limit: limitNum,

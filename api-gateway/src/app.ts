@@ -9,6 +9,7 @@ import userRoutes from "@/routes/user";
 import uploadRoutes from "@/routes/upload";
 import jobsRoutes from "@/routes/job";
 import dashboardRoutes from "@/routes/dashboard";
+import queueRoutes from "@/routes/queue";
 
 const app = express();
 
@@ -57,6 +58,7 @@ app.use("/api/users", userRoutes);
 app.use("/api/upload", uploadRoutes);
 app.use("/api/dashboard", dashboardRoutes);
 app.use("/api/jobs", jobsRoutes);
+app.use("/api/queue", queueRoutes);
 
 // Global error handler
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {

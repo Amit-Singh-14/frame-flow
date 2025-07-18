@@ -1,8 +1,8 @@
 import session from "express-session";
 import { Request, Response, NextFunction } from "express";
-import { UserModel } from "@/Repository/User";
 import { createClient } from "redis";
 import { RedisStore } from "connect-redis";
+import { UserRepository } from "@/Repository/User";
 
 const redisClient = createClient({
     socket: {
@@ -38,11 +38,11 @@ export const ensureUser = async (req: Request, res: Response, next: NextFunction
         if (req.session.userId) {
             return next();
         }
-        // If no user in session, create one using your existing UserModel
+        // If no user in session, create one using your existing UserRepository
         const sessionId = req.sessionID;
 
         // Use your existing findOrCreate method
-        const user = await UserModel.findOrCreate(sessionId);
+        const user = await UserRepository.findOrCreate(sessionId);
 
         // Store user info in session
         req.session.userId = user.id;
@@ -60,7 +60,7 @@ export const ensureUser = async (req: Request, res: Response, next: NextFunction
 export const getCurrentUser = async (req: Request, res: Response, next: NextFunction) => {
     try {
         if (req.session.userId) {
-            const user = await UserModel.findById(req.session.userId);
+            const user = await UserRepository.findById(req.session.userId);
             (req as any).user = user; // Attach user to request object
         }
         next();

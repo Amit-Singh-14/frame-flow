@@ -39,7 +39,6 @@ router.post("/", ensureUser, uploadWithMetadata(), async (req: Request, res: Res
             return;
         }
 
-        // TODO:Extract video metadata (duration, resolution, etc.)
         let videoMetadata;
         try {
             videoMetadata = await VideoMetadataExtractor.extractMetadata(req.file.path);

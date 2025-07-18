@@ -1,4 +1,5 @@
 import { CreateJobData, Job, JobRepository } from "@/Repository/Job";
+import { redisQueueService } from "./redisQueueService";
 
 export interface JobQueueInterface {
     addJob(jobId: number, priority?: number): Promise<void>;
@@ -7,9 +8,9 @@ export interface JobQueueInterface {
 }
 
 export class JobService {
-    private jobQueue?: JobQueueInterface;
+    private jobQueue: JobQueueInterface;
 
-    constructor(jobQueue?: JobQueueInterface) {
+    constructor(jobQueue: JobQueueInterface = redisQueueService) {
         this.jobQueue = jobQueue;
     }
 
@@ -32,19 +33,20 @@ export class JobService {
      */
     async queueJob(jobId: number): Promise<void> {
         try {
+            // Get job details to use priority
+            const job = await JobRepository.findById(jobId);
+            if (!job) {
+                throw new Error("Job not found");
+            }
+
             // Update job status to queued
             await JobRepository.updateStatus(jobId, "queued", {
                 statusDescription: "Job queued for processing",
                 healthStatus: "waiting",
             });
 
-            // Add to job queue if available
-            if (this.jobQueue) {
-                const job = await JobRepository.findById(jobId);
-                if (job) {
-                    await this.jobQueue.addJob(jobId, job.priority);
-                }
-            }
+            // Add to Redis queue
+            await this.jobQueue.addJob(jobId, job.priority);
 
             console.log(`Job ${jobId} queued successfully`);
         } catch (error) {
@@ -134,9 +136,7 @@ export class JobService {
             });
 
             // Remove from queue if it exists
-            if (this.jobQueue) {
-                await this.jobQueue.removeJob(jobId);
-            }
+            await this.jobQueue.removeJob(jobId);
 
             console.log(`Job ${jobId} cancelled: ${reason || "No reason provided"}`);
         } catch (error) {
@@ -232,11 +232,9 @@ export class JobService {
     async getNextJob(): Promise<Job | null> {
         try {
             // Try to get from job queue first
-            if (this.jobQueue) {
-                const jobId = await this.jobQueue.getNextJob();
-                if (jobId) {
-                    return await JobRepository.findById(jobId);
-                }
+            const jobId = await this.jobQueue.getNextJob();
+            if (jobId) {
+                return await JobRepository.findById(jobId);
             }
 
             // Fallback to getting queued jobs directly from database
@@ -305,9 +303,7 @@ export class JobService {
             }
 
             // Remove from queue if it exists
-            if (this.jobQueue && (job.status === "pending" || job.status === "queued")) {
-                await this.jobQueue.removeJob(jobId);
-            }
+            await this.jobQueue.removeJob(jobId);
 
             await JobRepository.delete(jobId);
             console.log(`Job ${jobId} deleted successfully`);
@@ -383,4 +379,4 @@ export class JobService {
 }
 
 // Export singleton instance
-export const jobService = new JobService();
+export const jobService = new JobService(redisQueueService);
