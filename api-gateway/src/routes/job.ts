@@ -1,10 +1,11 @@
 import { Request, Response } from "express";
 import { jobService } from "../services/jobService";
-import { Job } from "@/Repository/Job";
 import { Router } from "express";
 import { ensureUser } from "@/middlewares/session";
 import { db } from "@/database/connection";
 import { FileUtils } from "@/utils/file";
+import { FrontendJob, Job, JobError } from "@/types/job";
+import { calculateAge, generateProgressSteps, getDefaultHealthStatus, getDefaultStatusDescription, getJobActions } from "@/helpers";
 
 interface JobsQueryParams {
     page?: string;
@@ -15,88 +16,6 @@ interface JobsQueryParams {
     sort_by?: "created_at" | "updated_at" | "priority" | "status";
     sort_order?: "asc" | "desc";
 }
-
-interface ProgressStep {
-    step: string;
-    timestamp: string;
-}
-
-interface JobError {
-    message: string;
-    code: string;
-    retriable: boolean;
-}
-
-interface JobActions {
-    canRetry: boolean;
-    canDelete: boolean;
-}
-
-interface FrontendJob {
-    id: string;
-    title: string;
-    status: string;
-    statusDescription: string;
-    healthStatus: string;
-    age: string;
-    createdAt: string;
-    completedAt: string | null;
-    duration: number | null;
-    jobType: string;
-    tags: string[];
-    fileName: string;
-    formattedFileSize: string;
-    resolution: string;
-    previewUrl: string | null;
-    thumbnailUrl: string | null;
-    progressSteps: ProgressStep[];
-    error?: JobError;
-    actions: JobActions;
-}
-
-// Helper function to calculate age from timestamp
-const calculateAge = (timestamp: string): string => {
-    const now = new Date();
-    const created = new Date(timestamp);
-    const diffMs = now.getTime() - created.getTime();
-
-    const minutes = Math.floor(diffMs / (1000 * 60));
-    const hours = Math.floor(minutes / 60);
-    const days = Math.floor(hours / 24);
-
-    if (days > 0) return `${days}d ${hours % 24}h`;
-    if (hours > 0) return `${hours}h ${minutes % 60}m`;
-    if (minutes > 0) return `${minutes}m`;
-    return "Just now";
-};
-
-// Helper function to generate progress steps
-const generateProgressSteps = (job: any): ProgressStep[] => {
-    const steps: ProgressStep[] = [];
-
-    if (job.created_at) {
-        steps.push({ step: "queued", timestamp: job.created_at });
-    }
-
-    if (job.started_at) {
-        steps.push({ step: "processing", timestamp: job.started_at });
-    }
-
-    if (job.completed_at) {
-        const finalStatus = job.status === "failed" ? "failed" : "completed";
-        steps.push({ step: finalStatus, timestamp: job.completed_at });
-    }
-
-    return steps;
-};
-
-// Helper function to determine job actions
-const getJobActions = (job: any): JobActions => {
-    const canRetry = job.status === "failed" && !!job.error_retriable === true;
-    const canDelete = ["completed", "failed", "queued"].includes(job.status);
-
-    return { canRetry, canDelete };
-};
 
 const router = Router();
 
@@ -225,32 +144,6 @@ router.get("/", ensureUser, async (req: Request, res: Response) => {
             };
         });
 
-        // Helper function for default status descriptions
-        function getDefaultStatusDescription(status: string): string {
-            const descriptions = {
-                pending: "Job is pending",
-                queued: "Waiting in queue",
-                processing: "Job is being processed",
-                completed: "Job completed successfully",
-                failed: "Job failed to complete",
-                cancelled: "Job was cancelled",
-            };
-            return descriptions[status as keyof typeof descriptions] || "Unknown status";
-        }
-
-        // Helper function for default health status
-        function getDefaultHealthStatus(status: string): string {
-            const healthMap = {
-                pending: "waiting",
-                queued: "waiting",
-                processing: "in-progress",
-                completed: "healthy",
-                failed: "unhealthy",
-                cancelled: "unhealthy",
-            };
-            return healthMap[status as keyof typeof healthMap] || "unknown";
-        }
-
         // Response with pagination metadata
         res.json({
             jobs: transformedJobs,
@@ -300,4 +193,34 @@ router.get("/stats", ensureUser, async (req: Request, res: Response) => {
     }
 });
 
+router.get("/:jobId", async (req: Request, res: Response) => {
+    try {
+        const jobId = parseInt(req.params.jobId);
+
+        if (!jobId) {
+            res.status(400).json({ message: "jonId is required" });
+            return;
+        }
+
+        // Get full job details from database
+        const job = await jobService.getById(jobId);
+
+        if (!job) {
+            res.status(404).json({ error: "Job not found in database" });
+            return;
+        }
+
+        res.json({
+            success: true,
+            job: {
+                ...job,
+                conversion_settings: JSON.parse(job.conversion_settings || "{}"),
+            },
+        });
+        return;
+    } catch (error) {
+        console.error("Error getting next job:", error);
+        res.status(500).json({ error: "Failed to get next job" });
+    }
+});
 export default router;

@@ -1,5 +1,6 @@
-import { CreateJobData, Job, JobRepository } from "@/Repository/Job";
+import { JobRepository } from "@/Repository/Job";
 import { redisQueueService } from "./redisQueueService";
+import { CreateJobData, Job } from "@/types/job";
 
 export interface JobQueueInterface {
     addJob(jobId: number, priority?: number): Promise<void>;
@@ -182,9 +183,10 @@ export class JobService {
     /**
      * Update job progress
      */
-    async updateJobProgress(jobId: number, healthStatus: Job["health_status"], statusDescription: string): Promise<void> {
+    async updateJobProgress(jobId: number, status: Job["status"], statusDescription: string): Promise<void> {
         try {
-            await JobRepository.updateJobProgress(jobId, healthStatus, statusDescription);
+            console.log(jobId, status, statusDescription);
+            await JobRepository.updateJobProgress(jobId, status, statusDescription);
         } catch (error) {
             console.error(`Error updating job progress ${jobId}:`, error);
             throw new Error("Failed to update job progress");

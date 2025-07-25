@@ -1,60 +1,5 @@
 import { db } from "@/database/connection";
-
-export interface Job {
-    id: number;
-    user_id: number;
-    video_id: number;
-    title?: string;
-    status: "pending" | "queued" | "processing" | "completed" | "failed" | "cancelled";
-    health_status?: "healthy" | "unhealthy" | "in-progress" | "waiting";
-    status_description?: string;
-    job_type: "transcode" | "compress" | "resize" | "change-framerate" | "convert-container";
-    conversion_settings: string;
-    tags?: string;
-    created_at: string;
-    started_at?: string;
-    completed_at?: string;
-    updated_at?: string;
-    duration?: number;
-    file_name?: string;
-    file_size?: number;
-    resolution?: string;
-    output_file?: string;
-    preview_url?: string;
-    thumbnail_url?: string;
-    retry_count: number;
-    priority: number;
-    worker_id?: string;
-    error_message?: string;
-    error_code?: string;
-    error_retriable?: boolean;
-}
-
-export interface CreateJobData {
-    user_id: number;
-    video_id: number;
-    title?: string;
-    status: Job["status"];
-    health_status?: Job["health_status"];
-    status_description?: string;
-    job_type: Job["job_type"];
-    conversion_settings: string;
-    tags?: string;
-    created_at: string;
-    duration?: number;
-    file_name?: string;
-    file_size?: number;
-    resolution?: string;
-    output_file?: string;
-    preview_url?: string;
-    thumbnail_url?: string;
-    retry_count?: number;
-    priority?: number;
-    worker_id?: string;
-    error_message?: string;
-    error_code?: string;
-    error_retriable?: boolean;
-}
+import { CreateJobData, Job } from "@/types/job";
 
 export class JobRepository {
     static async create(jobData: CreateJobData): Promise<Job> {
@@ -333,10 +278,10 @@ export class JobRepository {
         }
     }
 
-    static async updateJobProgress(id: number, healthStatus: Job["health_status"], statusDescription: string): Promise<void> {
+    static async updateJobProgress(id: number, status: Job["status"], statusDescription: string): Promise<void> {
         try {
-            await db.run("UPDATE jobs SET health_status = ?, status_description = ?, updated_at = ? WHERE id = ?", [
-                healthStatus,
+            await db.run("UPDATE jobs SET status = ?, status_description = ?, updated_at = ? WHERE id = ?", [
+                status,
                 statusDescription,
                 new Date().toISOString(),
                 id,
