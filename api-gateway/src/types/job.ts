@@ -100,6 +100,8 @@ export interface FrontendJob {
     previewUrl: string | null;
     thumbnailUrl: string | null;
     progressSteps: ProgressStep[];
+    progressPercentage: number;
+    currentStep: string | null;
     error?: JobError;
     actions: JobActions;
 }

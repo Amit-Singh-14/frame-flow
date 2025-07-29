@@ -95,7 +95,6 @@ router.post("/fail/:jobId", async (req, res) => {
     try {
         const jobId = parseInt(req.params.jobId);
         const { errorMessage, errorCode, errorRetriable } = req.body;
-        console.log(req.body);
 
         if (!errorMessage) {
             res.status(400).json({
@@ -138,6 +137,45 @@ router.post("/progress/:jobId", async (req, res) => {
 
         // update job progress in database
         await jobService.updateJobProgress(jobId, status, status_description);
+
+        res.json({
+            success: true,
+            message: "Job progress updated",
+        });
+        return;
+    } catch (error) {
+        console.error("Error updating job progress:", error);
+        res.status(500).json({ error: "Failed to update job progress" });
+    }
+});
+
+/**
+ * POST /api/queue/progress/:id - udpate the currentStep in processing
+ */
+router.post("/progress/step/:jobId", async (req, res) => {
+    try {
+        const jobId = parseInt(req.params.jobId);
+        const { step, status_description } = req.body;
+
+        const job = await jobService.getById(jobId);
+
+        if (!job) {
+            res.status(400).json({
+                error: "no job found with id:",
+                jobId,
+            });
+            return;
+        }
+
+        if (job.status !== "processing") {
+            res.status(400).json({
+                error: "Job status must be processing for Step updates.",
+            });
+            return;
+        }
+
+        // update job progress in database
+        await jobService.updateJobStep(jobId, step, 10, status_description);
 
         res.json({
             success: true,

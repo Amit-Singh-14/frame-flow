@@ -139,6 +139,8 @@ router.get("/", ensureUser, async (req: Request, res: Response) => {
                 previewUrl: job.preview_url || null,
                 thumbnailUrl: job.thumbnail_url || null,
                 progressSteps: generateProgressSteps(job),
+                progressPercentage: job.progress_precentage || 0,
+                currentStep: job.current_step || null,
                 ...(error && { error }),
                 actions: getJobActions(job),
             };
@@ -221,6 +223,38 @@ router.get("/:jobId", async (req: Request, res: Response) => {
     } catch (error) {
         console.error("Error getting next job:", error);
         res.status(500).json({ error: "Failed to get next job" });
+    }
+});
+
+router.post("/start/:jobId", async (req, res) => {
+    const jobId = parseInt(req.params.jobId);
+
+    if (!jobId) {
+        res.status(400).json({
+            error: `jobId is required to start a job:`,
+        });
+        return;
+    }
+
+    const workerId = req.header("worker-id");
+    if (!workerId) {
+        res.status(401).json({
+            error: "workerId not present.",
+        });
+        return;
+    }
+
+    try {
+        await jobService.startJob(jobId, workerId);
+
+        res.status(200).json({
+            message: "job status updated",
+        });
+    } catch (error) {
+        res.status(400).json({
+            error: `Error starting job ${jobId}:`,
+        });
+        return;
     }
 });
 export default router;

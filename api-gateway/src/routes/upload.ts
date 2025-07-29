@@ -90,6 +90,8 @@ router.post("/", ensureUser, uploadWithMetadata(), async (req: Request, res: Res
             status: "pending" as const,
             health_status: "waiting" as const,
             status_description: "Job created and waiting to be queued",
+            current_step: "waiting_for_queue",
+            progress_percentage: 0,
             job_type: jobType,
             conversion_settings,
             tags: req.body.tags, // Can be comma-separated string or JSON array

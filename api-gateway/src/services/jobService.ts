@@ -1,6 +1,7 @@
 import { JobRepository } from "@/Repository/Job";
 import { redisQueueService } from "./redisQueueService";
 import { CreateJobData, Job } from "@/types/job";
+import { getStepDescription } from "@/helpers";
 
 export interface JobQueueInterface {
     addJob(jobId: number, priority?: number): Promise<void>;
@@ -44,6 +45,8 @@ export class JobService {
             await JobRepository.updateStatus(jobId, "queued", {
                 statusDescription: "Job queued for processing",
                 healthStatus: "waiting",
+                currentStep: "in_queue",
+                progressPercentage: 10,
             });
 
             // Add to Redis queue
@@ -56,6 +59,8 @@ export class JobService {
             await JobRepository.updateStatus(jobId, "pending", {
                 statusDescription: "Failed to queue job",
                 errorMessage: "Job queueing failed",
+                progressPercentage: 0,
+                currentStep: "queue_service_unavailable", // Add this
             });
             throw new Error("Failed to queue job");
         }
@@ -70,6 +75,8 @@ export class JobService {
                 workerId,
                 statusDescription: "Job is being processed",
                 healthStatus: "in-progress",
+                currentStep: "processing",
+                progressPercentage: 10,
             });
 
             console.log(`Job ${jobId} started by worker ${workerId}`);
@@ -97,6 +104,8 @@ export class JobService {
                 thumbnailUrl: options?.thumbnailUrl,
                 statusDescription: "Job completed successfully",
                 healthStatus: "healthy",
+                currentStep: "completed", // Add this
+                progressPercentage: 100, // Add this
             });
 
             console.log(`Job ${jobId} completed successfully`);
@@ -110,7 +119,6 @@ export class JobService {
      * Fail a job
      */
     async failJob(jobId: number, errorMessage: string, errorCode?: string, errorRetriable: boolean = false): Promise<void> {
-        console.log(errorRetriable);
         try {
             await JobRepository.updateStatus(jobId, "failed", {
                 errorMessage,
@@ -118,6 +126,8 @@ export class JobService {
                 errorRetriable,
                 statusDescription: `Job failed: ${errorMessage}`,
                 healthStatus: "unhealthy",
+                currentStep: "",
+                progressPercentage: 0,
             });
 
             console.log(`Job ${jobId} failed: ${errorMessage}`);
@@ -155,9 +165,9 @@ export class JobService {
                 throw new Error("Job not found");
             }
 
-            if (job.status !== "failed") {
-                throw new Error("Only failed jobs can be retried");
-            }
+            // if (job.status !== "failed") {
+            //     throw new Error("Only failed jobs can be retried");
+            // }
 
             // Increment retry count
             await JobRepository.incrementRetryCount(jobId);
@@ -176,7 +186,7 @@ export class JobService {
             console.log(`Job ${jobId} queued for retry (attempt ${job.retry_count + 1})`);
         } catch (error) {
             console.error(`Error retrying job ${jobId}:`, error);
-            throw new Error("Failed to retry job");
+            throw new Error("Failed to retry job:" + error);
         }
     }
 
@@ -185,11 +195,27 @@ export class JobService {
      */
     async updateJobProgress(jobId: number, status: Job["status"], statusDescription: string): Promise<void> {
         try {
-            console.log(jobId, status, statusDescription);
             await JobRepository.updateJobProgress(jobId, status, statusDescription);
+            const job = await jobService.getById(jobId);
+            console.log(job);
+            console.log(`Job ${jobId} progress updated: ${status} (${statusDescription}%)`);
         } catch (error) {
             console.error(`Error updating job progress ${jobId}:`, error);
             throw new Error("Failed to update job progress");
+        }
+    }
+
+    /**
+     * Update job processing step
+     */
+    async updateJobStep(jobId: number, step: string, progressPercentage: number, statusDescription?: string): Promise<void> {
+        try {
+            await JobRepository.updateJobStep(jobId, step, progressPercentage, statusDescription || getStepDescription(step));
+
+            console.log(`Job ${jobId} step updated: ${step} (${progressPercentage}%)`);
+        } catch (error) {
+            console.error(`Error updating job step ${jobId}:`, error);
+            throw new Error("Failed to update job step");
         }
     }
 

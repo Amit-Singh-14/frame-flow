@@ -21,7 +21,7 @@ export const generateProgressSteps = (job: any): ProgressStep[] => {
     // Add current step if job is in progress and we have step info
     if (job.status === "processing" && job.current_step && job.updated_at) {
         // only add if it's different from the basic "processing" step
-        if (job.current_step != "processing" && job.current_step !== "transcoding_started") {
+        if (job.current_step != "processing") {
             steps.push({
                 step: job.current_step,
                 timestamp: job.updated_at,
@@ -44,7 +44,7 @@ export const generateProgressSteps = (job: any): ProgressStep[] => {
 };
 
 // Helper function to get user-friendly step descriptions
-const getStepDescription = (step: string): string => {
+export const getStepDescription = (step: string): string => {
     const stepDescriptions: { [key: string]: string } = {
         waiting_for_queue: "Waiting for queue service",
         in_queue: "Waiting in processing queue",
@@ -67,27 +67,16 @@ export const getJobActions = (job: any): JobActions => {
     return { canRetry, canDelete };
 };
 
-export const calculateAge = (timestamp: string): string => {
-    const now = new Date();
-    const created = new Date(timestamp);
-    const diffMs = now.getTime() - created.getTime();
-
-    const minutes = Math.floor(diffMs / (1000 * 60));
-    const hours = Math.floor(minutes / 60);
-    const days = Math.floor(hours / 24);
-
-    if (days > 0) return `${days}d ago`;
-    if (hours > 0) return `${hours}h ago`;
-    if (minutes > 0) return `${minutes}m ago`;
-    return "Just now";
-};
-
 // Helper function for default status descriptions
-export function getDefaultStatusDescription(status: string): string {
+export function getDefaultStatusDescription(status: string, currentStep?: string): string {
+    if (status === "processing" && currentStep) {
+        return getStepDescription(currentStep);
+    }
+
     const descriptions = {
         pending: "Job is pending",
         queued: "Waiting in queue",
-        processing: "Job is being processed",
+        processing: currentStep ? getStepDescription(currentStep) : "Job is being processed",
         completed: "Job completed successfully",
         failed: "Job failed to complete",
         cancelled: "Job was cancelled",
@@ -107,6 +96,21 @@ export function getDefaultHealthStatus(status: string): string {
     };
     return healthMap[status as keyof typeof healthMap] || "unknown";
 }
+
+export const calculateAge = (timestamp: string): string => {
+    const now = new Date();
+    const created = new Date(timestamp);
+    const diffMs = now.getTime() - created.getTime();
+
+    const minutes = Math.floor(diffMs / (1000 * 60));
+    const hours = Math.floor(minutes / 60);
+    const days = Math.floor(hours / 24);
+
+    if (days > 0) return `${days}d ago`;
+    if (hours > 0) return `${hours}h ago`;
+    if (minutes > 0) return `${minutes}m ago`;
+    return "Just now";
+};
 
 // Helper function to process user job stats
 export const processUserStats = (userJobStats: any[], totalStorage: number) => {

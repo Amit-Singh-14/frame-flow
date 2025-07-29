@@ -80,7 +80,7 @@ export class JobRepository {
     static async updateStatus(
         id: number,
         status: Job["status"],
-        options?: {
+        opts: {
             outputFile?: string;
             errorMessage?: string;
             errorCode?: string;
@@ -90,50 +90,59 @@ export class JobRepository {
             workerId?: string;
             previewUrl?: string;
             thumbnailUrl?: string;
-        }
-    ): Promise<void> {
-        try {
-            console.log(options?.errorRetriable);
-            const now = new Date().toISOString();
-            const completedAt = status === "completed" ? now : null;
-            const startedAt = status === "processing" ? now : undefined;
 
+            currentStep?: string;
+            progressPercentage?: number;
+            stepDetails?: string;
+        } = {}
+    ): Promise<void> {
+        const now = new Date().toISOString();
+        const startedAt = status === "processing" ? now : undefined;
+        const completed = status === "completed" || status === "failed" ? now : null;
+
+        try {
             await db.run(
-                `UPDATE jobs 
-                 SET status = ?, 
-                     output_file = COALESCE(?, output_file),
-                     error_message = ?,
-                     error_code = ?,
-                     error_retriable = ?,
-                     health_status = COALESCE(?, health_status),
-                     status_description = COALESCE(?, status_description),
-                     worker_id = COALESCE(?, worker_id),
-                     preview_url = COALESCE(?, preview_url),
-                     thumbnail_url = COALESCE(?, thumbnail_url),
-                     completed_at = COALESCE(?, completed_at),
-                     started_at = COALESCE(?, started_at),
-                     updated_at = ?
-                 WHERE id = ?`,
+                `UPDATE jobs
+           SET status             = ?,
+               output_file        = COALESCE(?,  output_file),
+               error_message      = ?,
+               error_code         = ?,
+               error_retriable    = ?,
+               health_status      = COALESCE(?,  health_status),
+               status_description = COALESCE(?,  status_description),
+               worker_id          = COALESCE(?,  worker_id),
+               preview_url        = COALESCE(?,  preview_url),
+               thumbnail_url      = COALESCE(?,  thumbnail_url),
+               current_step       = COALESCE(?,  current_step),
+               progress_percentage= COALESCE(?,  progress_percentage),
+               step_details       = COALESCE(?,  step_details),
+               completed_at       = ?,
+               started_at         = ?,
+               updated_at         = ?
+         WHERE id = ?`,
                 [
                     status,
-                    options?.outputFile || null,
-                    options?.errorMessage || null,
-                    options?.errorCode || null,
-                    options?.errorRetriable || null,
-                    options?.healthStatus || null,
-                    options?.statusDescription || null,
-                    options?.workerId || null,
-                    options?.previewUrl || null,
-                    options?.thumbnailUrl || null,
-                    completedAt,
+                    opts.outputFile ?? null,
+                    opts.errorMessage ?? null,
+                    opts.errorCode ?? null,
+                    opts.errorRetriable ?? null,
+                    opts.healthStatus ?? null,
+                    opts.statusDescription ?? null,
+                    opts.workerId ?? null,
+                    opts.previewUrl ?? null,
+                    opts.thumbnailUrl ?? null,
+                    opts.currentStep ?? null,
+                    opts.progressPercentage ?? null,
+                    opts.stepDetails ?? null,
+                    completed,
                     startedAt,
                     now,
                     id,
                 ]
             );
-        } catch (error) {
-            console.error("Error updating job status:", error);
-            throw error;
+        } catch (e) {
+            console.error("Error updating job status:", e);
+            throw e;
         }
     }
 
@@ -289,6 +298,24 @@ export class JobRepository {
         } catch (error) {
             console.error("Error updating job progress:", error);
             throw error;
+        }
+    }
+
+    static async updateJobStep(id: number, step: string, percent: number, statusDescription?: string, stepDetails?: string): Promise<void> {
+        try {
+            await db.run(
+                `UPDATE jobs SET 
+                    current_step        = ?,
+                    progress_percentage = ?,
+                    status_description  = COALESCE(?, status_description),
+                    step_details        = COALESCE(?, step_details),
+                    updated_at          = ?
+                WHERE id = ?`,
+                [step, percent, statusDescription ?? null, stepDetails ?? null, new Date().toISOString(), id]
+            );
+        } catch (e) {
+            console.error("Error updating job step:", e);
+            throw e;
         }
     }
 }
