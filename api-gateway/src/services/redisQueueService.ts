@@ -1,6 +1,5 @@
 import Redis from "ioredis";
 import { JobQueueInterface } from "./jobService";
-import { config } from "@/utils/config";
 
 export class RedisQueueService implements JobQueueInterface {
     private redis: Redis;

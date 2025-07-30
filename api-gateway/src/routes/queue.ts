@@ -60,17 +60,18 @@ router.get("/next", async (req, res) => {
 router.post("/complete/:jobId", async (req, res) => {
     try {
         const jobId = parseInt(req.params.jobId);
-        const { outputFile, previewUrl, thumbnailUrl } = req.body;
+        const { output_file, preview_url, thumbnail_url } = req.body;
+        console.log(req.body);
 
-        if (!outputFile) {
+        if (!output_file) {
             res.status(400).json({
-                error: "outputFile is required",
+                error: "output_file is required",
             });
             return;
         }
 
         // updated job in database
-        await jobService.completeJob(jobId, outputFile, { previewUrl, thumbnailUrl });
+        await jobService.completeJob(jobId, output_file, { previewUrl: preview_url, thumbnailUrl: thumbnail_url });
 
         // update jon in redis queue
         await redisQueueService.completedJob(jobId);
@@ -124,9 +125,10 @@ router.post("/fail/:jobId", async (req, res) => {
 router.post("/progress/:jobId", async (req, res) => {
     try {
         const jobId = parseInt(req.params.jobId);
-        const { healthStatus, statusDescription } = req.body;
+        const { status, status_description } = req.body;
+        console.log(jobId, status, status_description, req.body);
 
-        if (!healthStatus || !statusDescription) {
+        if (!status || !status_description) {
             res.status(400).json({
                 error: "healthStatus and statusDescription are required",
             });
@@ -134,7 +136,46 @@ router.post("/progress/:jobId", async (req, res) => {
         }
 
         // update job progress in database
-        await jobService.updateJobProgress(jobId, healthStatus, statusDescription);
+        await jobService.updateJobProgress(jobId, status, status_description);
+
+        res.json({
+            success: true,
+            message: "Job progress updated",
+        });
+        return;
+    } catch (error) {
+        console.error("Error updating job progress:", error);
+        res.status(500).json({ error: "Failed to update job progress" });
+    }
+});
+
+/**
+ * POST /api/queue/progress/:id - udpate the currentStep in processing
+ */
+router.post("/progress/step/:jobId", async (req, res) => {
+    try {
+        const jobId = parseInt(req.params.jobId);
+        const { step, status_description } = req.body;
+
+        const job = await jobService.getById(jobId);
+
+        if (!job) {
+            res.status(400).json({
+                error: "no job found with id:",
+                jobId,
+            });
+            return;
+        }
+
+        if (job.status !== "processing") {
+            res.status(400).json({
+                error: "Job status must be processing for Step updates.",
+            });
+            return;
+        }
+
+        // update job progress in database
+        await jobService.updateJobStep(jobId, step, 10, status_description);
 
         res.json({
             success: true,
@@ -238,4 +279,12 @@ router.get("/health", async (req, res) => {
     }
 });
 
+router.post("/add/:jobid", async (req, res) => {
+    const jobId = parseInt(req.params.jobid);
+    await redisQueueService.clearQueue();
+    await redisQueueService.addJob(jobId);
+    res.json({
+        message: "added to queue",
+    });
+});
 export default router;

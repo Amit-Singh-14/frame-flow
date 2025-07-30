@@ -23,8 +23,8 @@ router.post("/", ensureUser, uploadWithMetadata(), async (req: Request, res: Res
             return;
         }
 
-        console.log("Uploaded file:", req.file);
-        console.log("File metadata:", req.fileMetadata);
+        // console.log("Uploaded file:", req.file);
+        // console.log("File metadata:", req.fileMetadata);
 
         // Validate the uploaded file
         const isValid = await uploadService.validateUploadedFile(req.file.path);
@@ -51,7 +51,7 @@ router.post("/", ensureUser, uploadWithMetadata(), async (req: Request, res: Res
                 format: req.fileMetadata.format,
             };
         }
-        console.log("videometa data: ", videoMetadata);
+        // console.log("videometa data: ", videoMetadata);
         const userId = req.session.userId;
         if (!userId) {
             await uploadService.cancelUpload(req.file.path);
@@ -90,6 +90,8 @@ router.post("/", ensureUser, uploadWithMetadata(), async (req: Request, res: Res
             status: "pending" as const,
             health_status: "waiting" as const,
             status_description: "Job created and waiting to be queued",
+            current_step: "waiting_for_queue",
+            progress_percentage: 0,
             job_type: jobType,
             conversion_settings,
             tags: req.body.tags, // Can be comma-separated string or JSON array
@@ -109,6 +111,7 @@ router.post("/", ensureUser, uploadWithMetadata(), async (req: Request, res: Res
             await jobService.queueJob(job.id);
         } catch (queueError) {
             console.warn("Could not queue job immediately:", queueError);
+            // TODO: when adding to queue fail after the service is up make sure to automatically add it to queue
             // Job is still created in database, can be picked up by workers later
         }
 

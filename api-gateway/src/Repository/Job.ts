@@ -1,60 +1,5 @@
 import { db } from "@/database/connection";
-
-export interface Job {
-    id: number;
-    user_id: number;
-    video_id: number;
-    title?: string;
-    status: "pending" | "queued" | "processing" | "completed" | "failed" | "cancelled";
-    health_status?: "healthy" | "unhealthy" | "in-progress" | "waiting";
-    status_description?: string;
-    job_type: "transcode" | "compress" | "resize" | "change-framerate" | "convert-container";
-    conversion_settings: string;
-    tags?: string;
-    created_at: string;
-    started_at?: string;
-    completed_at?: string;
-    updated_at?: string;
-    duration?: number;
-    file_name?: string;
-    file_size?: number;
-    resolution?: string;
-    output_file?: string;
-    preview_url?: string;
-    thumbnail_url?: string;
-    retry_count: number;
-    priority: number;
-    worker_id?: string;
-    error_message?: string;
-    error_code?: string;
-    error_retriable?: boolean;
-}
-
-export interface CreateJobData {
-    user_id: number;
-    video_id: number;
-    title?: string;
-    status: Job["status"];
-    health_status?: Job["health_status"];
-    status_description?: string;
-    job_type: Job["job_type"];
-    conversion_settings: string;
-    tags?: string;
-    created_at: string;
-    duration?: number;
-    file_name?: string;
-    file_size?: number;
-    resolution?: string;
-    output_file?: string;
-    preview_url?: string;
-    thumbnail_url?: string;
-    retry_count?: number;
-    priority?: number;
-    worker_id?: string;
-    error_message?: string;
-    error_code?: string;
-    error_retriable?: boolean;
-}
+import { CreateJobData, Job } from "@/types/job";
 
 export class JobRepository {
     static async create(jobData: CreateJobData): Promise<Job> {
@@ -135,7 +80,7 @@ export class JobRepository {
     static async updateStatus(
         id: number,
         status: Job["status"],
-        options?: {
+        opts: {
             outputFile?: string;
             errorMessage?: string;
             errorCode?: string;
@@ -145,50 +90,59 @@ export class JobRepository {
             workerId?: string;
             previewUrl?: string;
             thumbnailUrl?: string;
-        }
-    ): Promise<void> {
-        try {
-            console.log(options?.errorRetriable);
-            const now = new Date().toISOString();
-            const completedAt = status === "completed" ? now : null;
-            const startedAt = status === "processing" ? now : undefined;
 
+            currentStep?: string;
+            progressPercentage?: number;
+            stepDetails?: string;
+        } = {}
+    ): Promise<void> {
+        const now = new Date().toISOString();
+        const startedAt = status === "processing" ? now : undefined;
+        const completed = status === "completed" || status === "failed" ? now : null;
+
+        try {
             await db.run(
-                `UPDATE jobs 
-                 SET status = ?, 
-                     output_file = COALESCE(?, output_file),
-                     error_message = ?,
-                     error_code = ?,
-                     error_retriable = ?,
-                     health_status = COALESCE(?, health_status),
-                     status_description = COALESCE(?, status_description),
-                     worker_id = COALESCE(?, worker_id),
-                     preview_url = COALESCE(?, preview_url),
-                     thumbnail_url = COALESCE(?, thumbnail_url),
-                     completed_at = COALESCE(?, completed_at),
-                     started_at = COALESCE(?, started_at),
-                     updated_at = ?
-                 WHERE id = ?`,
+                `UPDATE jobs
+           SET status             = ?,
+               output_file        = COALESCE(?,  output_file),
+               error_message      = ?,
+               error_code         = ?,
+               error_retriable    = ?,
+               health_status      = COALESCE(?,  health_status),
+               status_description = COALESCE(?,  status_description),
+               worker_id          = COALESCE(?,  worker_id),
+               preview_url        = COALESCE(?,  preview_url),
+               thumbnail_url      = COALESCE(?,  thumbnail_url),
+               current_step       = COALESCE(?,  current_step),
+               progress_percentage= COALESCE(?,  progress_percentage),
+               step_details       = COALESCE(?,  step_details),
+               completed_at       = ?,
+               started_at         = ?,
+               updated_at         = ?
+         WHERE id = ?`,
                 [
                     status,
-                    options?.outputFile || null,
-                    options?.errorMessage || null,
-                    options?.errorCode || null,
-                    options?.errorRetriable || null,
-                    options?.healthStatus || null,
-                    options?.statusDescription || null,
-                    options?.workerId || null,
-                    options?.previewUrl || null,
-                    options?.thumbnailUrl || null,
-                    completedAt,
+                    opts.outputFile ?? null,
+                    opts.errorMessage ?? null,
+                    opts.errorCode ?? null,
+                    opts.errorRetriable ?? null,
+                    opts.healthStatus ?? null,
+                    opts.statusDescription ?? null,
+                    opts.workerId ?? null,
+                    opts.previewUrl ?? null,
+                    opts.thumbnailUrl ?? null,
+                    opts.currentStep ?? null,
+                    opts.progressPercentage ?? null,
+                    opts.stepDetails ?? null,
+                    completed,
                     startedAt,
                     now,
                     id,
                 ]
             );
-        } catch (error) {
-            console.error("Error updating job status:", error);
-            throw error;
+        } catch (e) {
+            console.error("Error updating job status:", e);
+            throw e;
         }
     }
 
@@ -333,10 +287,10 @@ export class JobRepository {
         }
     }
 
-    static async updateJobProgress(id: number, healthStatus: Job["health_status"], statusDescription: string): Promise<void> {
+    static async updateJobProgress(id: number, status: Job["status"], statusDescription: string): Promise<void> {
         try {
-            await db.run("UPDATE jobs SET health_status = ?, status_description = ?, updated_at = ? WHERE id = ?", [
-                healthStatus,
+            await db.run("UPDATE jobs SET status = ?, status_description = ?, updated_at = ? WHERE id = ?", [
+                status,
                 statusDescription,
                 new Date().toISOString(),
                 id,
@@ -344,6 +298,24 @@ export class JobRepository {
         } catch (error) {
             console.error("Error updating job progress:", error);
             throw error;
+        }
+    }
+
+    static async updateJobStep(id: number, step: string, percent: number, statusDescription?: string, stepDetails?: string): Promise<void> {
+        try {
+            await db.run(
+                `UPDATE jobs SET 
+                    current_step        = ?,
+                    progress_percentage = ?,
+                    status_description  = COALESCE(?, status_description),
+                    step_details        = COALESCE(?, step_details),
+                    updated_at          = ?
+                WHERE id = ?`,
+                [step, percent, statusDescription ?? null, stepDetails ?? null, new Date().toISOString(), id]
+            );
+        } catch (e) {
+            console.error("Error updating job step:", e);
+            throw e;
         }
     }
 }

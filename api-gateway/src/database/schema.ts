@@ -60,6 +60,10 @@ export const initialzeDatabase = async (): Promise<void> => {
                 completed_at DATETIME,
                 updated_at DATETIME,
 
+                progress_percentage INTEGER DEFAULT 0,
+                current_step TEXT,
+                step_details TEXT,
+
                 duration INTEGER, -- in seconds
                 file_name TEXT,
                 file_size INTEGER,
