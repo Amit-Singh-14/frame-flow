@@ -24,6 +24,6 @@ type JobResult struct {
 
 type JobProgress struct {
 	JobID             int    `json:"job_id"`
-	HealthStatus      string `json:"health_status"`
+	Step              string `json:"step"`
 	StatusDescription string `json:"status_description"`
 }

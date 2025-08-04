@@ -15,6 +15,10 @@ type Config struct {
 	InputDir        string
 	OutputDir       string
 	ShutdownTimeout time.Duration
+
+	REDISURL      string
+	QUERYKEY      string
+	PROCESSINGKEY string
 }
 
 func LoadConfig() *Config {
@@ -28,6 +32,10 @@ func LoadConfig() *Config {
 		PORT:            getEnv("PORT", "8080"),
 		ENVIRONMENT:     getEnv("ENVIRONMENT", "development"),
 		ShutdownTimeout: time.Duration(10) * time.Second,
+
+		REDISURL:      getEnv("REDISURL", "localhost:6379"),
+		QUERYKEY:      getEnv("QUERYKEY", "videoJobs:queue"),
+		PROCESSINGKEY: getEnv("PROCESSINGKEY", "video_jobs:processing"),
 	}
 }
 

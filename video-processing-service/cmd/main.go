@@ -9,6 +9,7 @@ import (
 	"time"
 	"video-processor/internal/config"
 	"video-processor/internal/router"
+	"video-processor/internal/services"
 	"video-processor/internal/utils"
 )
 
@@ -44,6 +45,19 @@ func main() {
 			log.Fatalf("Failed to start server: %v", err)
 		}
 
+	}()
+
+	// Initialize the Processor
+	p, err := services.NewProcessor(cfg)
+
+	if err != nil {
+		log.Fatalf("Failed to create processor: %v", err)
+	}
+
+	go func() {
+		if err := p.Start(ctx); err != nil && err != context.Canceled {
+			log.Printf("Processor stopped with error: %v", err)
+		}
 	}()
 
 	// Listen for the interrupt signal
